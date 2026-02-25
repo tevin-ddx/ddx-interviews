@@ -113,10 +113,10 @@ export default function NotebookEditor({ initialCells }: NotebookEditorProps) {
       {cells.map((cell, index) => (
         <div
           key={cell.id}
-          className="rounded-lg border border-zinc-800 bg-zinc-900/50"
+          className="rounded-lg border border-border bg-card"
         >
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5">
-            <span className="text-xs text-zinc-500">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-xs text-muted-foreground">
               In [{index + 1}]
             </span>
             <div className="flex items-center gap-1">
@@ -147,7 +147,7 @@ export default function NotebookEditor({ initialCells }: NotebookEditorProps) {
             />
           </div>
           {(cell.output || cell.stderr || cell.isRunning) && (
-            <div className="h-24 border-t border-zinc-800">
+            <div className="h-24 border-t border-border">
               <OutputConsole
                 output={cell.output}
                 stderr={cell.stderr}
@@ -161,7 +161,7 @@ export default function NotebookEditor({ initialCells }: NotebookEditorProps) {
       ))}
       <button
         onClick={addCell}
-        className="w-full rounded-lg border border-dashed border-zinc-700 py-2 text-sm text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300 cursor-pointer"
+        className="w-full rounded-lg border border-dashed border-border/80 py-2 text-sm text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground/80 cursor-pointer"
       >
         + Add Cell
       </button>

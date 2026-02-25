@@ -269,13 +269,13 @@ export default function CollaborativeEditor({
   );
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-800">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-border">
       {/* Presence bar */}
-      <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-border bg-background px-3 py-1.5">
         <div
           className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-zinc-600"}`}
         />
-        <span className="text-[10px] text-zinc-500">
+        <span className="text-[10px] text-muted-foreground">
           {connected ? "Live" : "Connecting..."}
         </span>
         <div className="flex items-center gap-1 ml-auto">

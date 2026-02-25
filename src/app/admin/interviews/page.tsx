@@ -91,7 +91,7 @@ export default function InterviewsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Interviews</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage interview sessions
           </p>
         </div>
@@ -101,11 +101,11 @@ export default function InterviewsPage() {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-sm text-zinc-500">
+        <div className="py-12 text-center text-sm text-muted-foreground">
           Loading...
         </div>
       ) : interviews.length === 0 ? (
-        <div className="py-12 text-center text-sm text-zinc-500">
+        <div className="py-12 text-center text-sm text-muted-foreground">
           No interviews yet. Start your first one!
         </div>
       ) : (
@@ -118,7 +118,7 @@ export default function InterviewsPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 px-6 py-4"
+                className="flex items-center justify-between rounded-xl border border-border bg-card px-6 py-4"
               >
                 <div>
                   <div className="flex items-center gap-2">
@@ -131,14 +131,14 @@ export default function InterviewsPage() {
                     </Badge>
                     <span className="font-medium">{iv.title}</span>
                     {iv.question && (
-                      <span className="text-xs text-zinc-500">
+                      <span className="text-xs text-muted-foreground">
                         — {iv.question.title}
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {new Date(iv.createdAt).toLocaleDateString()} ·{" "}
-                    <code className="text-zinc-600">
+                    <code className="text-muted-foreground/70">
                       {iv.id.slice(0, 8)}...
                     </code>
                   </p>
@@ -195,17 +195,17 @@ export default function InterviewsPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+              className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-lg font-semibold">Start New Interview</h2>
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Create a session and share the link with your candidate
               </p>
 
               <div className="mt-4 space-y-4">
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-zinc-300">
+                  <label className="block text-sm font-medium text-foreground/80">
                     Title
                   </label>
                   <input
@@ -217,12 +217,12 @@ export default function InterviewsPage() {
                       }))
                     }
                     placeholder="e.g. Frontend Engineer – Round 1"
-                    className="flex h-9 w-full rounded-lg border border-input bg-zinc-800 px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-input bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-zinc-300">
+                  <label className="block text-sm font-medium text-foreground/80">
                     Question (optional)
                   </label>
                   <select
@@ -233,7 +233,7 @@ export default function InterviewsPage() {
                         questionId: e.target.value,
                       }))
                     }
-                    className="flex h-9 w-full rounded-lg border border-input bg-zinc-800 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-input bg-secondary px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">No pre-selected question</option>
                     {questions.map((q) => (

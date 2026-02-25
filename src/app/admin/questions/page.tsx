@@ -48,7 +48,7 @@ export default function QuestionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Questions</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage your interview question bank
           </p>
         </div>
@@ -58,11 +58,11 @@ export default function QuestionsPage() {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-sm text-zinc-500">
+        <div className="py-12 text-center text-sm text-muted-foreground">
           Loading...
         </div>
       ) : questions.length === 0 ? (
-        <div className="py-12 text-center text-sm text-zinc-500">
+        <div className="py-12 text-center text-sm text-muted-foreground">
           No questions yet. Create your first one!
         </div>
       ) : (
@@ -75,7 +75,7 @@ export default function QuestionsPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 px-6 py-4"
+                className="flex items-center justify-between rounded-xl border border-border bg-card px-6 py-4"
               >
                 <div className="flex items-center gap-4">
                   <div>
@@ -93,12 +93,12 @@ export default function QuestionsPage() {
                         <Badge>{q.category}</Badge>
                       )}
                       {q.files?.length > 0 && (
-                        <span className="text-xs text-zinc-500">
+                        <span className="text-xs text-muted-foreground">
                           📎 {q.files.length} file{q.files.length > 1 ? "s" : ""}
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 max-w-lg truncate text-sm text-zinc-400">
+                    <p className="mt-1 max-w-lg truncate text-sm text-muted-foreground">
                       {q.description}
                     </p>
                   </div>

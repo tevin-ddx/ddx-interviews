@@ -59,7 +59,7 @@ export default function EditQuestionPage({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-zinc-500">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         Loading...
       </div>
     );
@@ -84,7 +84,7 @@ export default function EditQuestionPage({
         />
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-zinc-300">
+          <label className="block text-sm font-medium text-foreground/80">
             Description
           </label>
           <textarea
@@ -93,13 +93,13 @@ export default function EditQuestionPage({
               setForm((f) => ({ ...f, description: e.target.value }))
             }
             rows={4}
-            className="flex w-full rounded-lg border border-input bg-zinc-900 px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             required
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-zinc-300">
+          <label className="block text-sm font-medium text-foreground/80">
             Boilerplate Code
           </label>
           <textarea
@@ -108,13 +108,13 @@ export default function EditQuestionPage({
               setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
             }
             rows={6}
-            className="flex w-full rounded-lg border border-input bg-zinc-900 px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-foreground/80">
               Difficulty
             </label>
             <select
@@ -122,7 +122,7 @@ export default function EditQuestionPage({
               onChange={(e) =>
                 setForm((f) => ({ ...f, difficulty: e.target.value }))
               }
-              className="flex h-9 w-full rounded-lg border border-input bg-zinc-900 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>

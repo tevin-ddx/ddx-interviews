@@ -99,7 +99,7 @@ export default function NewQuestionPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <h1 className="text-2xl font-bold">New Question</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-muted-foreground">
           Add a new coding interview question
         </p>
       </motion.div>
@@ -115,7 +115,7 @@ export default function NewQuestionPage() {
         />
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-zinc-300">
+          <label className="block text-sm font-medium text-foreground/80">
             Description
           </label>
           <textarea
@@ -124,7 +124,7 @@ export default function NewQuestionPage() {
               setForm((f) => ({ ...f, description: e.target.value }))
             }
             rows={4}
-            className="flex w-full rounded-lg border border-input bg-zinc-900 px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder="Describe the problem..."
             required
           />
@@ -132,20 +132,20 @@ export default function NewQuestionPage() {
 
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-foreground/80">
               Language
             </label>
             <select
               value={form.language}
               onChange={(e) => handleLanguageChange(e.target.value)}
-              className="flex h-9 w-full rounded-lg border border-input bg-zinc-900 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="python">Python</option>
               <option value="cpp">C++</option>
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-foreground/80">
               Difficulty
             </label>
             <select
@@ -153,7 +153,7 @@ export default function NewQuestionPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, difficulty: e.target.value }))
               }
-              className="flex h-9 w-full rounded-lg border border-input bg-zinc-900 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
@@ -172,7 +172,7 @@ export default function NewQuestionPage() {
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-zinc-300">
+          <label className="block text-sm font-medium text-foreground/80">
             Boilerplate Code
           </label>
           <textarea
@@ -181,16 +181,16 @@ export default function NewQuestionPage() {
               setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
             }
             rows={6}
-            className="flex w-full rounded-lg border border-input bg-zinc-900 px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
 
         {/* File Attachments */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">
+          <label className="block text-sm font-medium text-foreground/80">
             Attachments
           </label>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             Upload reference files, datasets, or test inputs for this question
           </p>
 
@@ -199,19 +199,19 @@ export default function NewQuestionPage() {
               {uploadedFiles.map((file, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2"
+                  className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-indigo-400">📎</span>
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400">📎</span>
                     <span className="text-sm">{file.name}</span>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-muted-foreground">
                       ({(file.size / 1024).toFixed(1)} KB)
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeFile(idx)}
-                    className="text-xs text-zinc-500 hover:text-red-400 cursor-pointer"
+                    className="text-xs text-muted-foreground hover:text-red-400 cursor-pointer"
                   >
                     Remove
                   </button>
