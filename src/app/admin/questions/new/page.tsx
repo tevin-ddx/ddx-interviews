@@ -1,21 +1,61 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
+interface UploadedFile {
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
+}
+
 export default function NewQuestionPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
     boilerplateCode: "# Write your solution here\n",
     difficulty: "medium",
     category: "",
+    language: "python",
   });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    Array.from(files).forEach((f) => formData.append("files", f));
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.files) {
+        setUploadedFiles((prev) => [...prev, ...data.files]);
+      }
+    } catch {
+      alert("Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeFile = (idx: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,7 +65,7 @@ export default function NewQuestionPage() {
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, files: uploadedFiles }),
       });
 
       if (res.ok) {
@@ -34,6 +74,22 @@ export default function NewQuestionPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const boilerplates: Record<string, string> = {
+    python: "# Write your solution here\n",
+    cpp: '#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}\n',
+  };
+
+  const handleLanguageChange = (lang: string) => {
+    setForm((f) => ({
+      ...f,
+      language: lang,
+      boilerplateCode:
+        f.boilerplateCode === boilerplates[f.language]
+          ? boilerplates[lang] || ""
+          : f.boilerplateCode,
+    }));
   };
 
   return (
@@ -74,22 +130,20 @@ export default function NewQuestionPage() {
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-zinc-300">
-            Boilerplate Code
-          </label>
-          <textarea
-            value={form.boilerplateCode}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
-            }
-            rows={6}
-            className="flex w-full rounded-lg border border-input bg-zinc-900 px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            placeholder="def solution():"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-zinc-300">
+              Language
+            </label>
+            <select
+              value={form.language}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              className="flex h-9 w-full rounded-lg border border-input bg-zinc-900 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="python">Python</option>
+              <option value="cpp">C++</option>
+            </select>
+          </div>
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-zinc-300">
               Difficulty
@@ -115,6 +169,75 @@ export default function NewQuestionPage() {
             }
             placeholder="e.g. Arrays"
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-zinc-300">
+            Boilerplate Code
+          </label>
+          <textarea
+            value={form.boilerplateCode}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
+            }
+            rows={6}
+            className="flex w-full rounded-lg border border-input bg-zinc-900 px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+
+        {/* File Attachments */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">
+            Attachments
+          </label>
+          <p className="text-xs text-zinc-500">
+            Upload reference files, datasets, or test inputs for this question
+          </p>
+
+          {uploadedFiles.length > 0 && (
+            <div className="space-y-1">
+              {uploadedFiles.map((file, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-indigo-400">📎</span>
+                    <span className="text-sm">{file.name}</span>
+                    <span className="text-xs text-zinc-500">
+                      ({(file.size / 1024).toFixed(1)} KB)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(idx)}
+                    className="text-xs text-zinc-500 hover:text-red-400 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? "Uploading..." : "Upload Files"}
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 pt-2">

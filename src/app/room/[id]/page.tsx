@@ -31,6 +31,14 @@ const NotebookEditor = dynamic(
   }
 );
 
+interface QuestionFile {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
+}
+
 interface Interview {
   id: string;
   title: string;
@@ -43,6 +51,8 @@ interface Interview {
     description: string;
     boilerplateCode: string;
     difficulty: string;
+    language: string;
+    files: QuestionFile[];
   } | null;
 }
 
@@ -61,6 +71,7 @@ export default function RoomPage({
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [executionTime, setExecutionTime] = useState<number | null>(null);
   const [mode, setMode] = useState<EditorMode>("script");
+  const [language, setLanguage] = useState<string>("python");
   const [showQuestion, setShowQuestion] = useState(true);
   const [userName, setUserName] = useState("");
   const [joined, setJoined] = useState(false);
@@ -76,6 +87,7 @@ export default function RoomPage({
       })
       .then((data: Interview) => {
         setInterview(data);
+        setLanguage(data.question?.language || data.language || "python");
       })
       .catch(() => setNotFound(true));
   }, [id]);
@@ -98,7 +110,7 @@ export default function RoomPage({
       const res = await fetch("/api/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, language }),
       });
       const result = await res.json();
       setExecutionTime(Date.now() - start);
@@ -112,7 +124,7 @@ export default function RoomPage({
     } finally {
       setIsRunning(false);
     }
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -214,6 +226,15 @@ export default function RoomPage({
         </div>
 
         <div className="flex items-center gap-2">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="h-7 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="python">Python</option>
+            <option value="cpp">C++</option>
+          </select>
+
           <div className="flex rounded-lg border border-zinc-800 text-xs">
             <button
               onClick={() => setMode("script")}
@@ -281,6 +302,29 @@ export default function RoomPage({
                       </p>
                     ))}
                 </div>
+                {interview.question.files &&
+                  interview.question.files.length > 0 && (
+                    <div className="space-y-1.5 border-t border-zinc-800 pt-3">
+                      <p className="text-xs font-medium text-zinc-400">
+                        Attachments
+                      </p>
+                      {interview.question.files.map((f) => (
+                        <a
+                          key={f.id}
+                          href={f.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5 text-xs text-indigo-400 hover:bg-zinc-800/50 transition-colors"
+                        >
+                          <span>📎</span>
+                          <span className="truncate">{f.name}</span>
+                          <span className="ml-auto text-zinc-600">
+                            {(f.size / 1024).toFixed(1)}KB
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
               </div>
             </motion.div>
           )}
@@ -305,7 +349,7 @@ export default function RoomPage({
                   roomId={id}
                   userName={userName}
                   initialContent={initialContent}
-                  language="python"
+                  language={language === "cpp" ? "cpp" : "python"}
                   onCodeRef={handleCodeRef}
                 />
               </div>

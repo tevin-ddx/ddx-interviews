@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await params;
   const interview = await prisma.interview.findUnique({
     where: { id },
-    include: { question: true },
+    include: { question: { include: { files: true } } },
   });
   if (!interview) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

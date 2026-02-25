@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 export async function GET() {
   const questions = await prisma.question.findMany({
     orderBy: { createdAt: "desc" },
+    include: { files: true },
   });
   return NextResponse.json(questions);
 }
@@ -24,7 +25,23 @@ export async function POST(request: NextRequest) {
         boilerplateCode: body.boilerplateCode || "",
         difficulty: body.difficulty || "medium",
         category: body.category || "",
+        language: body.language || "python",
+        files: body.files?.length
+          ? {
+              createMany: {
+                data: body.files.map(
+                  (f: { name: string; url: string; size: number; mimeType: string }) => ({
+                    name: f.name,
+                    url: f.url,
+                    size: f.size,
+                    mimeType: f.mimeType,
+                  })
+                ),
+              },
+            }
+          : undefined,
       },
+      include: { files: true },
     });
     return NextResponse.json(question, { status: 201 });
   } catch {

@@ -13,7 +13,9 @@ interface Question {
   boilerplateCode: string;
   difficulty: string;
   category: string;
+  language: string;
   createdAt: string;
+  files: { id: string; name: string }[];
 }
 
 export default function QuestionsPage() {
@@ -86,8 +88,14 @@ export default function QuestionsPage() {
                       >
                         {q.difficulty}
                       </Badge>
+                      <Badge>{q.language === "cpp" ? "C++" : "Python"}</Badge>
                       {q.category && (
                         <Badge>{q.category}</Badge>
+                      )}
+                      {q.files?.length > 0 && (
+                        <span className="text-xs text-zinc-500">
+                          📎 {q.files.length} file{q.files.length > 1 ? "s" : ""}
+                        </span>
                       )}
                     </div>
                     <p className="mt-1 max-w-lg truncate text-sm text-zinc-400">

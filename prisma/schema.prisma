@@ -16,15 +16,28 @@ model AdminUser {
 }
 
 model Question {
-  id              String      @id @default(uuid())
+  id              String         @id @default(uuid())
   title           String
   description     String
-  boilerplateCode String      @default("")
-  difficulty      String      @default("medium")
-  category        String      @default("")
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  boilerplateCode String         @default("")
+  difficulty      String         @default("medium")
+  category        String         @default("")
+  language        String         @default("python")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   interviews      Interview[]
+  files           QuestionFile[]
+}
+
+model QuestionFile {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  name       String
+  url        String
+  size       Int
+  mimeType   String
+  createdAt  DateTime @default(now())
 }
 
 model Interview {

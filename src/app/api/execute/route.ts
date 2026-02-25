@@ -6,19 +6,26 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 
 const PISTON_URL = "https://emkc.org/api/v2/piston/execute";
-const EXEC_TIMEOUT_MS = 15_000;
+const EXEC_TIMEOUT_MS = 30_000;
+const DOCKER_IMAGE = "codestream-runner";
+const DOCKER_FALLBACK_PY = "python:3.12-alpine";
 
-let dockerAvailable: boolean | null = null;
+let dockerState: { available: boolean; hasCustomImage: boolean } | null = null;
 
-function isDockerAvailable(): boolean {
-  if (dockerAvailable !== null) return dockerAvailable;
+function checkDocker() {
+  if (dockerState !== null) return dockerState;
   try {
     execSync("docker info", { stdio: "ignore", timeout: 3000 });
-    dockerAvailable = true;
+    let hasCustomImage = false;
+    try {
+      const out = execSync(`docker images -q ${DOCKER_IMAGE}`, { timeout: 3000 }).toString().trim();
+      hasCustomImage = out.length > 0;
+    } catch { /* no custom image */ }
+    dockerState = { available: true, hasCustomImage };
   } catch {
-    dockerAvailable = false;
+    dockerState = { available: false, hasCustomImage: false };
   }
-  return dockerAvailable;
+  return dockerState;
 }
 
 interface ExecResult {
@@ -30,31 +37,14 @@ interface ExecResult {
   engine: string;
 }
 
-async function executeDocker(code: string): Promise<ExecResult | null> {
-  if (!isDockerAvailable()) return null;
-
-  const filename = `cs_${randomUUID()}.py`;
-  const hostPath = join(tmpdir(), filename);
-  await writeFile(hostPath, code, "utf-8");
-
+function dockerExec(cmd: string, timeout: number): Promise<ExecResult & { ok: boolean }> {
   return new Promise((resolve) => {
-    const cmd = [
-      "docker run --rm",
-      "--network none",
-      "--memory 128m",
-      "--cpus 0.5",
-      `--stop-timeout ${Math.floor(EXEC_TIMEOUT_MS / 1000)}`,
-      `-v "${hostPath}:/code/${filename}:ro"`,
-      "python:3.12-alpine",
-      `python /code/${filename}`,
-    ].join(" ");
-
     const child = exec(
       cmd,
-      { timeout: EXEC_TIMEOUT_MS, maxBuffer: 1024 * 512 },
-      async (error, stdout, stderr) => {
-        await unlink(hostPath).catch(() => {});
+      { timeout, maxBuffer: 1024 * 512 },
+      (error, stdout, stderr) => {
         resolve({
+          ok: true,
           stdout: stdout || "",
           stderr: stderr || "",
           code: error ? (error.code ?? 1) : 0,
@@ -64,12 +54,71 @@ async function executeDocker(code: string): Promise<ExecResult | null> {
         });
       }
     );
-
-    setTimeout(() => child.kill("SIGTERM"), EXEC_TIMEOUT_MS);
+    setTimeout(() => child.kill("SIGTERM"), timeout);
   });
 }
 
-async function executePiston(code: string): Promise<ExecResult | null> {
+async function executeDockerPython(code: string): Promise<ExecResult | null> {
+  const { available, hasCustomImage } = checkDocker();
+  if (!available) return null;
+
+  const filename = `cs_${randomUUID()}.py`;
+  const hostPath = join(tmpdir(), filename);
+  await writeFile(hostPath, code, "utf-8");
+
+  const image = hasCustomImage ? DOCKER_IMAGE : DOCKER_FALLBACK_PY;
+  const cmd = [
+    "docker run --rm",
+    "--network none",
+    "--memory 256m",
+    "--cpus 1",
+    `-v "${hostPath}:/code/${filename}:ro"`,
+    image,
+    `python /code/${filename}`,
+  ].join(" ");
+
+  const result = await dockerExec(cmd, EXEC_TIMEOUT_MS);
+  await unlink(hostPath).catch(() => {});
+  return result;
+}
+
+async function executeDockerCpp(code: string): Promise<ExecResult | null> {
+  const { available, hasCustomImage } = checkDocker();
+  if (!available) return null;
+
+  const id = randomUUID().slice(0, 8);
+  const srcFile = `cs_${id}.cpp`;
+  const hostPath = join(tmpdir(), srcFile);
+  await writeFile(hostPath, code, "utf-8");
+
+  const image = hasCustomImage ? DOCKER_IMAGE : "gcc:14";
+  const compileAndRun = `g++ -O2 -std=c++17 -o /tmp/prog /code/${srcFile} && /tmp/prog`;
+  const cmd = [
+    "docker run --rm",
+    "--network none",
+    "--memory 256m",
+    "--cpus 1",
+    `-v "${hostPath}:/code/${srcFile}:ro"`,
+    image,
+    `sh -c '${compileAndRun}'`,
+  ].join(" ");
+
+  const result = await dockerExec(cmd, EXEC_TIMEOUT_MS);
+  await unlink(hostPath).catch(() => {});
+  return result;
+}
+
+async function executePiston(
+  code: string,
+  language: string
+): Promise<ExecResult | null> {
+  const langMap: Record<string, { language: string; version: string }> = {
+    python: { language: "python", version: "3.10.0" },
+    cpp: { language: "c++", version: "10.2.0" },
+  };
+  const lang = langMap[language];
+  if (!lang) return null;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -78,8 +127,8 @@ async function executePiston(code: string): Promise<ExecResult | null> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        language: "python",
-        version: "3.10.0",
+        language: lang.language,
+        version: lang.version,
         files: [{ content: code }],
       }),
       signal: controller.signal,
@@ -102,7 +151,7 @@ async function executePiston(code: string): Promise<ExecResult | null> {
   }
 }
 
-async function executeLocal(code: string): Promise<ExecResult> {
+async function executeLocalPython(code: string): Promise<ExecResult> {
   const filename = join(tmpdir(), `cs_${randomUUID()}.py`);
   await writeFile(filename, code, "utf-8");
 
@@ -122,14 +171,39 @@ async function executeLocal(code: string): Promise<ExecResult> {
         });
       }
     );
-
     setTimeout(() => child.kill("SIGTERM"), EXEC_TIMEOUT_MS);
+  });
+}
+
+async function executeLocalCpp(code: string): Promise<ExecResult> {
+  const id = randomUUID().slice(0, 8);
+  const srcFile = join(tmpdir(), `cs_${id}.cpp`);
+  const binFile = join(tmpdir(), `cs_${id}`);
+  await writeFile(srcFile, code, "utf-8");
+
+  return new Promise((resolve) => {
+    exec(
+      `g++ -O2 -std=c++17 -o "${binFile}" "${srcFile}" && "${binFile}"`,
+      { timeout: EXEC_TIMEOUT_MS, maxBuffer: 1024 * 512 },
+      async (error, stdout, stderr) => {
+        await unlink(srcFile).catch(() => {});
+        await unlink(binFile).catch(() => {});
+        resolve({
+          stdout: stdout || "",
+          stderr: stderr || "",
+          code: error ? (error.code ?? 1) : 0,
+          signal: error?.signal || null,
+          output: (stdout || "") + (stderr || ""),
+          engine: "local",
+        });
+      }
+    );
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { code } = await request.json();
+    const { code, language = "python" } = await request.json();
 
     if (!code || !code.trim()) {
       return NextResponse.json(
@@ -138,16 +212,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Docker sandbox (most secure, local dev)
-    const dockerResult = await executeDocker(code);
+    if (language === "cpp") {
+      const dockerResult = await executeDockerCpp(code);
+      if (dockerResult) return NextResponse.json(dockerResult);
+
+      const pistonResult = await executePiston(code, "cpp");
+      if (pistonResult) return NextResponse.json(pistonResult);
+
+      const localResult = await executeLocalCpp(code);
+      return NextResponse.json(localResult);
+    }
+
+    // Python (default)
+    const dockerResult = await executeDockerPython(code);
     if (dockerResult) return NextResponse.json(dockerResult);
 
-    // 2. Piston API (works from Vercel)
-    const pistonResult = await executePiston(code);
+    const pistonResult = await executePiston(code, "python");
     if (pistonResult) return NextResponse.json(pistonResult);
 
-    // 3. Local Python fallback (dev only)
-    const localResult = await executeLocal(code);
+    const localResult = await executeLocalPython(code);
     return NextResponse.json(localResult);
   } catch {
     return NextResponse.json(
