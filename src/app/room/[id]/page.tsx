@@ -1,20 +1,23 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import OutputConsole from "@/components/editor/OutputConsole";
 
-const CodeEditor = dynamic(() => import("@/components/editor/CodeEditor"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center bg-zinc-900 text-zinc-500">
-      Loading editor...
-    </div>
-  ),
-});
+const CollaborativeEditor = dynamic(
+  () => import("@/components/editor/CollaborativeEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center bg-zinc-900 text-zinc-500">
+        Loading editor...
+      </div>
+    ),
+  }
+);
 
 const NotebookEditor = dynamic(
   () => import("@/components/editor/NotebookEditor"),
@@ -52,7 +55,6 @@ export default function RoomPage({
 }) {
   const { id } = use(params);
   const [interview, setInterview] = useState<Interview | null>(null);
-  const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
   const [stderr, setStderr] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -64,6 +66,8 @@ export default function RoomPage({
   const [joined, setJoined] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
+  const codeGetterRef = useRef<(() => string) | null>(null);
+
   useEffect(() => {
     fetch(`/api/interviews/${id}`)
       .then((r) => {
@@ -72,16 +76,18 @@ export default function RoomPage({
       })
       .then((data: Interview) => {
         setInterview(data);
-        setCode(
-          data.code ||
-            data.question?.boilerplateCode ||
-            "# Write your code here\n"
-        );
       })
       .catch(() => setNotFound(true));
   }, [id]);
 
+  const handleCodeRef = useCallback((getter: () => string) => {
+    codeGetterRef.current = getter;
+  }, []);
+
   const runCode = useCallback(async () => {
+    const code = codeGetterRef.current ? codeGetterRef.current() : "";
+    if (!code.trim()) return;
+
     setIsRunning(true);
     setOutput("");
     setStderr("");
@@ -106,16 +112,7 @@ export default function RoomPage({
     } finally {
       setIsRunning(false);
     }
-  }, [code]);
-
-  const saveCode = useCallback(async () => {
-    if (!interview) return;
-    await fetch(`/api/interviews/${interview.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    });
-  }, [interview, code]);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -123,14 +120,10 @@ export default function RoomPage({
         e.preventDefault();
         runCode();
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        saveCode();
-      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [runCode, saveCode]);
+  }, [runCode]);
 
   if (notFound) {
     return (
@@ -195,6 +188,11 @@ export default function RoomPage({
     );
   }
 
+  const initialContent =
+    interview.code ||
+    interview.question?.boilerplateCode ||
+    "# Write your code here\n";
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* Top Bar */}
@@ -216,11 +214,6 @@ export default function RoomPage({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1">
-            <div className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span className="text-xs text-zinc-300">{userName}</span>
-          </div>
-
           <div className="flex rounded-lg border border-zinc-800 text-xs">
             <button
               onClick={() => setMode("script")}
@@ -308,10 +301,12 @@ export default function RoomPage({
           {mode === "script" ? (
             <>
               <div className="flex-1 overflow-hidden">
-                <CodeEditor
-                  value={code}
-                  onChange={setCode}
+                <CollaborativeEditor
+                  roomId={id}
+                  userName={userName}
+                  initialContent={initialContent}
                   language="python"
+                  onCodeRef={handleCodeRef}
                 />
               </div>
               <div className="w-[400px] shrink-0 border-l border-zinc-800">

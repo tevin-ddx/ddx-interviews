@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:ws": "node server/ws.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -21,8 +22,10 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "uuid": "^13.0.0",
+    "ws": "^8.19.0",
     "y-monaco": "^0.1.6",
     "y-webrtc": "^10.3.0",
+    "y-websocket": "^3.0.0",
     "yjs": "^13.6.29"
   },
   "devDependencies": {
