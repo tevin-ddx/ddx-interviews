@@ -29,10 +29,14 @@ Admin login: `admin@codestream.dev` / `admin123`. JWT sessions in HTTP-only cook
 
 ### Code execution
 
-The `/api/execute` endpoint uses a 3-tier fallback:
-1. **Docker sandbox** (primary): `python:3.12-alpine` with `--network none`, memory/CPU limits. Requires Docker and `sudo chmod 666 /var/run/docker.sock`.
+Supports **Python** and **C++**. The `/api/execute` endpoint uses a 3-tier fallback:
+1. **Docker sandbox** (primary): Custom `codestream-runner` image with Python 3.12 (pandas, numpy, torch), g++ (C++17). Build with `docker build -t codestream-runner -f docker/runner.Dockerfile .`. Requires `sudo chmod 666 /var/run/docker.sock`.
 2. **Piston API** (fallback for Vercel): Free external API at `emkc.org`.
-3. **Local Python** (last resort): Direct `python3` via `child_process`.
+3. **Local fallback** (dev): `python3` or `g++` via `child_process`.
+
+### File attachments
+
+Questions support file attachments (datasets, test inputs, reference files). Uses `@vercel/blob` when `BLOB_READ_WRITE_TOKEN` is set (Vercel deployment), otherwise stores locally in `public/uploads/`.
 
 ### Gotchas
 
