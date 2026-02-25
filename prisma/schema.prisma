@@ -20,6 +20,7 @@ model Question {
   title           String
   description     String
   boilerplateCode String         @default("")
+  solutionCode    String         @default("")
   difficulty      String         @default("medium")
   category        String         @default("")
   language        String         @default("python")
@@ -41,13 +42,37 @@ model QuestionFile {
 }
 
 model Interview {
-  id         String    @id @default(uuid())
+  id         String           @id @default(uuid())
   title      String
-  status     String    @default("active")
+  status     String           @default("active")
   questionId String?
-  question   Question? @relation(fields: [questionId], references: [id])
-  code       String    @default("")
-  language   String    @default("python")
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  question   Question?        @relation(fields: [questionId], references: [id])
+  code       String           @default("")
+  language   String           @default("python")
+  endedAt    DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  events     InterviewEvent[]
+  notes      InterviewNote[]
+}
+
+model InterviewEvent {
+  id          String   @id @default(uuid())
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  timestamp   Int
+  userName    String
+  type        String   @default("edit")
+  content     String
+  createdAt   DateTime @default(now())
+}
+
+model InterviewNote {
+  id          String   @id @default(uuid())
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  authorId    String
+  content     String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const session = await getSession();
+
   const interview = await prisma.interview.findUnique({
     where: { id },
     include: { question: { include: { files: true } } },
@@ -13,6 +16,12 @@ export async function GET(
   if (!interview) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Strip solution from non-admin users
+  if (!session && interview.question) {
+    (interview.question as Record<string, unknown>).solutionCode = "";
+  }
+
   return NextResponse.json(interview);
 }
 

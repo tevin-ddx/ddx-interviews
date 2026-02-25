@@ -144,7 +144,7 @@ export default function InterviewsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {iv.status === "active" && (
+                  {iv.status === "active" ? (
                     <>
                       <Button
                         variant="secondary"
@@ -166,6 +166,12 @@ export default function InterviewsPage() {
                         End
                       </Button>
                     </>
+                  ) : (
+                    <a href={`/admin/interviews/${iv.id}/review`}>
+                      <Button variant="secondary" size="sm">
+                        Review
+                      </Button>
+                    </a>
                   )}
                   <Button
                     variant="ghost"

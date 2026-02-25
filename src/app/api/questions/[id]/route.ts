@@ -35,6 +35,7 @@ export async function PUT(
         title: body.title,
         description: body.description,
         boilerplateCode: body.boilerplateCode,
+        solutionCode: body.solutionCode,
         difficulty: body.difficulty,
         category: body.category,
       },

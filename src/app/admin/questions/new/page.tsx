@@ -23,6 +23,7 @@ export default function NewQuestionPage() {
     title: "",
     description: "",
     boilerplateCode: "# Write your solution here\n",
+    solutionCode: "",
     difficulty: "medium",
     category: "",
     language: "python",
@@ -182,6 +183,21 @@ export default function NewQuestionPage() {
             }
             rows={6}
             className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-foreground/80">
+            Solution Code <span className="text-muted-foreground font-normal">(interviewer-only, hidden from candidates)</span>
+          </label>
+          <textarea
+            value={form.solutionCode}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, solutionCode: e.target.value }))
+            }
+            rows={6}
+            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder="Optional: paste the reference solution here"
           />
         </div>
 

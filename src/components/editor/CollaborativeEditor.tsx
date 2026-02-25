@@ -16,6 +16,13 @@ interface Peer {
   clientId: number;
 }
 
+interface EditorEvent {
+  timestamp: number;
+  userName: string;
+  type: string;
+  content: string;
+}
+
 interface CollaborativeEditorProps {
   roomId: string;
   userName: string;
@@ -23,6 +30,7 @@ interface CollaborativeEditorProps {
   language?: string;
   readOnly?: boolean;
   onCodeRef?: (getter: () => string) => void;
+  onEvent?: (event: EditorEvent) => void;
 }
 
 const MSG_SYNC_STEP1 = 0;
@@ -117,6 +125,7 @@ export default function CollaborativeEditor({
   language = "python",
   readOnly = false,
   onCodeRef,
+  onEvent,
 }: CollaborativeEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
@@ -235,6 +244,14 @@ export default function CollaborativeEditor({
           msg.set(update, 1);
           ws.send(msg);
         }
+        if (onEvent) {
+          onEvent({
+            timestamp: Date.now(),
+            userName,
+            type: "edit",
+            content: yText.toString(),
+          });
+        }
       });
 
       const model = editorInstance.getModel();
@@ -248,7 +265,7 @@ export default function CollaborativeEditor({
         bindingRef.current = binding;
       }
     },
-    [roomId, userName, initialContent, onCodeRef]
+    [roomId, userName, initialContent, onCodeRef, onEvent]
   );
 
   useEffect(() => {

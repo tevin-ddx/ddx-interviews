@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
         title: body.title,
         description: body.description,
         boilerplateCode: body.boilerplateCode || "",
+        solutionCode: body.solutionCode || "",
         difficulty: body.difficulty || "medium",
         category: body.category || "",
         language: body.language || "python",

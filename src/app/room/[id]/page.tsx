@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import ThemeToggle from "@/components/ui/ThemeToggle";
@@ -51,13 +52,22 @@ interface Interview {
     title: string;
     description: string;
     boilerplateCode: string;
+    solutionCode: string;
     difficulty: string;
     language: string;
     files: QuestionFile[];
   } | null;
 }
 
+interface EditorEvent {
+  timestamp: number;
+  userName: string;
+  type: string;
+  content: string;
+}
+
 type EditorMode = "script" | "notebook";
+type RightPanel = "output" | "notes" | "solution";
 
 export default function RoomPage({
   params,
@@ -65,6 +75,7 @@ export default function RoomPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [interview, setInterview] = useState<Interview | null>(null);
   const [output, setOutput] = useState("");
   const [stderr, setStderr] = useState("");
@@ -75,10 +86,18 @@ export default function RoomPage({
   const [language, setLanguage] = useState<string>("python");
   const [showQuestion, setShowQuestion] = useState(true);
   const [userName, setUserName] = useState("");
+  const [userRole, setUserRole] = useState<"interviewer" | "candidate">("candidate");
   const [joined, setJoined] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [rightPanel, setRightPanel] = useState<RightPanel>("output");
+  const [noteContent, setNoteContent] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showSolution, setShowSolution] = useState(false);
 
   const codeGetterRef = useRef<(() => string) | null>(null);
+  const eventBufferRef = useRef<EditorEvent[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch(`/api/interviews/${id}`)
@@ -93,14 +112,59 @@ export default function RoomPage({
       .catch(() => setNotFound(true));
   }, [id]);
 
+  // Check if user is an admin (interviewer)
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.user) setUserRole("interviewer");
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load existing notes if interviewer
+  useEffect(() => {
+    if (userRole === "interviewer" && joined) {
+      fetch(`/api/interviews/${id}/notes`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.note) setNoteContent(data.note.content);
+        })
+        .catch(() => {});
+    }
+  }, [userRole, joined, id]);
+
+  // Flush event buffer periodically
+  useEffect(() => {
+    if (!joined) return;
+    flushTimerRef.current = setInterval(() => {
+      const buf = eventBufferRef.current;
+      if (buf.length === 0) return;
+      eventBufferRef.current = [];
+      fetch(`/api/interviews/${id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: buf }),
+      }).catch(() => {});
+    }, 3000);
+    return () => {
+      if (flushTimerRef.current) clearInterval(flushTimerRef.current);
+    };
+  }, [joined, id]);
+
   const handleCodeRef = useCallback((getter: () => string) => {
     codeGetterRef.current = getter;
+  }, []);
+
+  const handleEditorEvent = useCallback((event: EditorEvent) => {
+    eventBufferRef.current.push(event);
   }, []);
 
   const runCode = useCallback(async () => {
     const code = codeGetterRef.current ? codeGetterRef.current() : "";
     if (!code.trim()) return;
 
+    setRightPanel("output");
     setIsRunning(true);
     setOutput("");
     setStderr("");
@@ -126,6 +190,45 @@ export default function RoomPage({
       setIsRunning(false);
     }
   }, [language]);
+
+  const endInterview = async () => {
+    const finalCode = codeGetterRef.current ? codeGetterRef.current() : "";
+    // Flush remaining events
+    const buf = eventBufferRef.current;
+    eventBufferRef.current = [];
+    if (buf.length > 0) {
+      await fetch(`/api/interviews/${id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: buf }),
+      }).catch(() => {});
+    }
+    // Save notes
+    if (noteContent.trim()) {
+      await fetch(`/api/interviews/${id}/notes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: noteContent }),
+      }).catch(() => {});
+    }
+    // End the interview
+    await fetch(`/api/interviews/${id}/end`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ finalCode }),
+    });
+    router.push(`/admin/interviews/${id}/review`);
+  };
+
+  const saveNote = async () => {
+    setNoteSaving(true);
+    await fetch(`/api/interviews/${id}/notes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: noteContent }),
+    });
+    setNoteSaving(false);
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -159,6 +262,24 @@ export default function RoomPage({
     );
   }
 
+  if (interview.status === "completed") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Interview Ended</h1>
+          <p className="text-muted-foreground">
+            This interview session has been completed.
+          </p>
+          {userRole === "interviewer" && (
+            <Button onClick={() => router.push(`/admin/interviews/${id}/review`)}>
+              View Review
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!joined) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -168,7 +289,7 @@ export default function RoomPage({
           className="w-full max-w-sm space-y-6 rounded-xl border border-border bg-card p-8"
         >
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white">
               CS
             </div>
             <h1 className="text-xl font-semibold">{interview.title}</h1>
@@ -206,12 +327,14 @@ export default function RoomPage({
     interview.question?.boilerplateCode ||
     "# Write your code here\n";
 
+  const hasSolution = !!interview.question?.solutionCode;
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* Top Bar */}
       <header className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white">
             CS
           </div>
           <span className="text-sm font-medium">{interview.title}</span>
@@ -242,7 +365,7 @@ export default function RoomPage({
               onClick={() => setMode("script")}
               className={`px-3 py-1.5 transition-colors cursor-pointer ${
                 mode === "script"
-                  ? "bg-secondary text-white"
+                  ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               } rounded-l-lg`}
             >
@@ -252,7 +375,7 @@ export default function RoomPage({
               onClick={() => setMode("notebook")}
               className={`px-3 py-1.5 transition-colors cursor-pointer ${
                 mode === "notebook"
-                  ? "bg-secondary text-white"
+                  ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               } rounded-r-lg`}
             >
@@ -268,6 +391,16 @@ export default function RoomPage({
           >
             {isRunning ? "Running..." : "▶ Run"}
           </Button>
+
+          {userRole === "interviewer" && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowEndConfirm(true)}
+            >
+              End Interview
+            </Button>
+          )}
         </div>
       </header>
 
@@ -295,7 +428,7 @@ export default function RoomPage({
                     Hide
                   </button>
                 </div>
-                <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-foreground/80">
+                <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground/80">
                   {interview.question.description
                     .split("\n")
                     .map((line, i) => (
@@ -304,29 +437,28 @@ export default function RoomPage({
                       </p>
                     ))}
                 </div>
-                {interview.question.files &&
-                  interview.question.files.length > 0 && (
-                    <div className="space-y-1.5 border-t border-border pt-3">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Attachments
-                      </p>
-                      {interview.question.files.map((f) => (
-                        <a
-                          key={f.id}
-                          href={f.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-secondary/50 transition-colors"
-                        >
-                          <span>📎</span>
-                          <span className="truncate">{f.name}</span>
-                          <span className="ml-auto text-muted-foreground/70">
-                            {(f.size / 1024).toFixed(1)}KB
-                          </span>
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                {interview.question.files?.length > 0 && (
+                  <div className="space-y-1.5 border-t border-border pt-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Attachments
+                    </p>
+                    {interview.question.files.map((f) => (
+                      <a
+                        key={f.id}
+                        href={f.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-secondary/50 transition-colors"
+                      >
+                        <span>📎</span>
+                        <span className="truncate">{f.name}</span>
+                        <span className="ml-auto text-muted-foreground/70">
+                          {(f.size / 1024).toFixed(1)}KB
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -342,7 +474,7 @@ export default function RoomPage({
           </button>
         )}
 
-        {/* Editor + Output */}
+        {/* Editor + Right Panel */}
         <div className="flex flex-1 overflow-hidden">
           {mode === "script" ? (
             <>
@@ -353,16 +485,119 @@ export default function RoomPage({
                   initialContent={initialContent}
                   language={language === "cpp" ? "cpp" : "python"}
                   onCodeRef={handleCodeRef}
+                  onEvent={handleEditorEvent}
                 />
               </div>
-              <div className="w-[400px] shrink-0 border-l border-border">
-                <OutputConsole
-                  output={output}
-                  stderr={stderr}
-                  isRunning={isRunning}
-                  exitCode={exitCode}
-                  executionTime={executionTime}
-                />
+              <div className="w-[400px] shrink-0 border-l border-border flex flex-col">
+                {/* Right panel tabs */}
+                {userRole === "interviewer" && (
+                  <div className="flex border-b border-border text-xs">
+                    <button
+                      onClick={() => setRightPanel("output")}
+                      className={`flex-1 py-2 transition-colors cursor-pointer ${
+                        rightPanel === "output"
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Output
+                    </button>
+                    <button
+                      onClick={() => setRightPanel("notes")}
+                      className={`flex-1 py-2 transition-colors cursor-pointer ${
+                        rightPanel === "notes"
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Notes
+                    </button>
+                    {hasSolution && (
+                      <button
+                        onClick={() => setRightPanel("solution")}
+                        className={`flex-1 py-2 transition-colors cursor-pointer ${
+                          rightPanel === "solution"
+                            ? "bg-secondary text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Solution
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-hidden">
+                  {rightPanel === "output" && (
+                    <OutputConsole
+                      output={output}
+                      stderr={stderr}
+                      isRunning={isRunning}
+                      exitCode={exitCode}
+                      executionTime={executionTime}
+                    />
+                  )}
+
+                  {rightPanel === "notes" && userRole === "interviewer" && (
+                    <div className="flex h-full flex-col p-3 gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        Private notes — only visible to you
+                      </p>
+                      <textarea
+                        value={noteContent}
+                        onChange={(e) => setNoteContent(e.target.value)}
+                        className="flex-1 resize-none rounded-lg border border-input bg-card p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        placeholder="Take notes during the interview..."
+                      />
+                      <Button
+                        onClick={saveNote}
+                        disabled={noteSaving}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {noteSaving ? "Saving..." : "Save Notes"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {rightPanel === "solution" &&
+                    userRole === "interviewer" &&
+                    hasSolution && (
+                      <div className="flex h-full flex-col">
+                        {showSolution ? (
+                          <>
+                            <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Reference Solution
+                              </span>
+                              <button
+                                onClick={() => setShowSolution(false)}
+                                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                              >
+                                Hide
+                              </button>
+                            </div>
+                            <pre className="flex-1 overflow-auto p-4 font-mono text-sm text-foreground/90 bg-card">
+                              {interview.question!.solutionCode}
+                            </pre>
+                          </>
+                        ) : (
+                          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                            <p className="text-sm text-muted-foreground">
+                              Solution is hidden
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setShowSolution(true)}
+                            >
+                              Reveal Solution
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                </div>
               </div>
             </>
           ) : (
@@ -372,6 +607,45 @@ export default function RoomPage({
           )}
         </div>
       </div>
+
+      {/* End Interview Confirmation Modal */}
+      <AnimatePresence>
+        {showEndConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowEndConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-semibold">End Interview?</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This will save the final code, your notes, and all edit history.
+                The session will be marked as completed and participants will be
+                disconnected.
+              </p>
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowEndConfirm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={endInterview}>
+                  End Interview
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
