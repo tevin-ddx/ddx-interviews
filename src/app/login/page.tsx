@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,18 +43,21 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
+      <div className="fixed top-4 right-4">
+        <ThemeToggle />
+      </div>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-sm space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-8"
+        className="w-full max-w-sm space-y-6 rounded-xl border border-border bg-card p-8"
       >
         <div className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white">
             CS
           </div>
           <h1 className="text-xl font-semibold">Sign in to CodeStream</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Admin panel access
           </p>
         </div>
@@ -93,7 +97,7 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="text-center text-xs text-zinc-500">
+        <p className="text-center text-xs text-muted-foreground">
           Demo: admin@codestream.dev / admin123
         </p>
       </motion.div>

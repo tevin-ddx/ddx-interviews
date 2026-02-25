@@ -1,6 +1,29 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #f9fafb;
+  --card-foreground: #0a0a0a;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #18181b;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #6366f1;
+  --destructive: #ef4444;
+  --ring: #6366f1;
+  --success: #22c55e;
+  --warning: #eab308;
+  --surface-high: #e5e7eb;
+}
+
+.dark {
   --background: #09090b;
   --foreground: #fafafa;
   --card: #18181b;
@@ -18,6 +41,7 @@
   --ring: #6366f1;
   --success: #22c55e;
   --warning: #eab308;
+  --surface-high: #3f3f46;
 }
 
 @theme inline {
@@ -38,6 +62,7 @@
   --color-ring: var(--ring);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-surface-high: var(--surface-high);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-jetbrains-mono);
 }
@@ -62,10 +87,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--surface-high);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--muted-foreground);
 }

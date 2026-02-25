@@ -7,12 +7,12 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<string, string> = {
-  default: "bg-zinc-800 text-zinc-300",
-  easy: "bg-emerald-900/50 text-emerald-400 border-emerald-800",
-  medium: "bg-amber-900/50 text-amber-400 border-amber-800",
-  hard: "bg-red-900/50 text-red-400 border-red-800",
-  active: "bg-indigo-900/50 text-indigo-400 border-indigo-800",
-  completed: "bg-zinc-800 text-zinc-400 border-zinc-700",
+  default: "bg-secondary text-secondary-foreground",
+  easy: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-400 dark:border-emerald-800",
+  medium: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/50 dark:text-amber-400 dark:border-amber-800",
+  hard: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/50 dark:text-red-400 dark:border-red-800",
+  active: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-400 dark:border-indigo-800",
+  completed: "bg-secondary text-muted-foreground border-border",
 };
 
 export default function Badge({ children, variant = "default", className = "" }: BadgeProps) {

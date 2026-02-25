@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 import OutputConsole from "@/components/editor/OutputConsole";
 
 const CollaborativeEditor = dynamic(
@@ -226,6 +227,7 @@ export default function RoomPage({
         </div>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}

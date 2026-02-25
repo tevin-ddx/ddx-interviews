@@ -20,8 +20,8 @@ export default function OutputConsole({
   const hasError = stderr && stderr.trim().length > 0;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-2">
           <div
             className={`h-2 w-2 rounded-full ${
@@ -31,13 +31,13 @@ export default function OutputConsole({
                   ? "bg-red-400"
                   : exitCode === 0
                     ? "bg-emerald-400"
-                    : "bg-zinc-600"
+                    : "bg-muted-foreground/40"
             }`}
           />
-          <span className="text-xs font-medium text-zinc-400">Output</span>
+          <span className="text-xs font-medium text-muted-foreground">Output</span>
         </div>
         {executionTime !== null && executionTime !== undefined && (
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-muted-foreground">
             {executionTime}ms
           </span>
         )}
@@ -82,17 +82,17 @@ export default function OutputConsole({
               className="space-y-2"
             >
               {output && (
-                <pre className="whitespace-pre-wrap text-zinc-200">
+                <pre className="whitespace-pre-wrap text-foreground">
                   {output}
                 </pre>
               )}
               {hasError && (
-                <pre className="whitespace-pre-wrap text-red-400">
+                <pre className="whitespace-pre-wrap text-red-500 dark:text-red-400">
                   {stderr}
                 </pre>
               )}
               {!output && !hasError && exitCode === null && (
-                <span className="text-zinc-600">
+                <span className="text-muted-foreground">
                   Click &quot;Run&quot; to execute your code
                 </span>
               )}

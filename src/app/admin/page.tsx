@@ -18,7 +18,7 @@ export default async function AdminDashboard() {
     <div className="space-y-8 p-8">
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-muted-foreground">
           Overview of your interview platform
         </p>
       </div>
@@ -34,22 +34,22 @@ export default async function AdminDashboard() {
         />
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
-        <div className="border-b border-zinc-800 px-6 py-4">
+      <div className="rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-6 py-4">
           <h2 className="font-semibold">Recent Active Sessions</h2>
         </div>
         {activeInterviews.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-zinc-500">
+          <div className="px-6 py-12 text-center text-sm text-muted-foreground">
             No active interviews.{" "}
             <Link
               href="/admin/interviews"
-              className="text-indigo-400 hover:underline"
+              className="text-indigo-600 dark:text-indigo-400 hover:underline"
             >
               Start one
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800">
+          <div className="divide-y divide-border">
             {activeInterviews.map((iv) => (
               <div
                 key={iv.id}
@@ -59,14 +59,14 @@ export default async function AdminDashboard() {
                   <Badge variant="active">Active</Badge>
                   <span className="text-sm">{iv.title}</span>
                   {iv.question && (
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-muted-foreground">
                       — {iv.question.title}
                     </span>
                   )}
                 </div>
                 <Link
                   href={`/room/${iv.id}`}
-                  className="text-xs text-indigo-400 hover:underline"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                 >
                   Join →
                 </Link>
@@ -92,10 +92,10 @@ function StatCard({
 }) {
   return (
     <Link href={href}>
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 transition-colors hover:border-zinc-700">
-        <p className="text-sm text-zinc-400">{label}</p>
+      <div className="rounded-xl border border-border bg-card p-6 transition-colors hover:border-border/80 hover:shadow-sm">
+        <p className="text-sm text-muted-foreground">{label}</p>
         <p
-          className={`mt-2 text-3xl font-bold ${accent ? "text-indigo-400" : ""}`}
+          className={`mt-2 text-3xl font-bold ${accent ? "text-indigo-600 dark:text-indigo-400" : ""}`}
         >
           {value}
         </p>

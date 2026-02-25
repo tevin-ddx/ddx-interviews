@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "◆" },
@@ -20,13 +21,13 @@ export default function AdminNav() {
   };
 
   return (
-    <nav className="flex h-screen w-56 flex-col border-r border-zinc-800 bg-zinc-950">
-      <div className="border-b border-zinc-800 p-4">
+    <nav className="flex h-screen w-56 flex-col border-r border-border bg-card">
+      <div className="border-b border-border p-4">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
             CS
           </div>
-          <span className="text-sm font-semibold text-zinc-100">
+          <span className="text-sm font-semibold text-foreground">
             CodeStream
           </span>
         </Link>
@@ -44,8 +45,8 @@ export default function AdminNav() {
               <motion.div
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
                   isActive
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                 }`}
                 whileHover={{ x: 2 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -58,10 +59,14 @@ export default function AdminNav() {
         })}
       </div>
 
-      <div className="border-t border-zinc-800 p-3">
+      <div className="border-t border-border p-3 space-y-2">
+        <div className="flex items-center justify-between px-3">
+          <span className="text-xs text-muted-foreground">Theme</span>
+          <ThemeToggle />
+        </div>
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 cursor-pointer"
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground cursor-pointer"
         >
           <span className="text-xs">⏻</span>
           Sign Out

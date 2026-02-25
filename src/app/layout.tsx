@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { JetBrains_Mono } from "next/font/google";
+import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,17 +25,33 @@ export const metadata: Metadata = {
     "A real-time collaborative coding interview platform with live editing, code execution, and session management.",
 };
 
+const themeScript = `
+(function(){
+  try {
+    var t = localStorage.getItem('codestream-theme') || 'dark';
+    var d = t === 'system'
+      ? (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light')
+      : t;
+    if (d === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  } catch(e){}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
