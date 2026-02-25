@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
@@ -20,21 +20,25 @@ export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchQuestions = useCallback(async () => {
-    const res = await fetch("/api/questions");
-    const data = await res.json();
-    setQuestions(data);
-    setLoading(false);
-  }, []);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetchQuestions();
-  }, [fetchQuestions]);
+    let cancelled = false;
+    fetch("/api/questions")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) {
+          setQuestions(data);
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this question?")) return;
     await fetch(`/api/questions/${id}`, { method: "DELETE" });
-    fetchQuestions();
+    setRefreshKey((k) => k + 1);
   };
 
   return (

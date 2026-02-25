@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -31,19 +31,21 @@ export default function InterviewsPage() {
     questionId: "",
   });
 
-  const fetchData = useCallback(async () => {
-    const [ivRes, qRes] = await Promise.all([
-      fetch("/api/interviews"),
-      fetch("/api/questions"),
-    ]);
-    setInterviews(await ivRes.json());
-    setQuestions(await qRes.json());
-    setLoading(false);
-  }, []);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let cancelled = false;
+    Promise.all([fetch("/api/interviews"), fetch("/api/questions")])
+      .then(([ivRes, qRes]) => Promise.all([ivRes.json(), qRes.json()]))
+      .then(([ivData, qData]) => {
+        if (!cancelled) {
+          setInterviews(ivData);
+          setQuestions(qData);
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
   const handleCreate = async () => {
     const res = await fetch("/api/interviews", {
@@ -58,7 +60,7 @@ export default function InterviewsPage() {
     if (res.ok) {
       setShowModal(false);
       setNewInterview({ title: "", questionId: "" });
-      fetchData();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -75,13 +77,13 @@ export default function InterviewsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
     });
-    fetchData();
+    setRefreshKey((k) => k + 1);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this interview?")) return;
     await fetch(`/api/interviews/${id}`, { method: "DELETE" });
-    fetchData();
+    setRefreshKey((k) => k + 1);
   };
 
   return (
