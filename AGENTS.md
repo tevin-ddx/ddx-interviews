@@ -6,7 +6,14 @@
 
 ### Available scripts
 
-See `package.json`. Key commands: `npm run dev`, `npm run build`, `npm run lint`.
+See `package.json`. Key commands: `npm run dev`, `npm run dev:ws`, `npm run build`, `npm run lint`.
+
+### Real-time collaboration
+
+- A separate Yjs WebSocket server at `server/ws.mjs` runs on port 1234.
+- Start it with `npm run dev:ws` alongside the Next.js dev server.
+- Each interview room connects to `ws://localhost:1234/<roomId>` for CRDT-based document sync.
+- Cursor presence is handled via a custom awareness protocol over the same WebSocket.
 
 ### Database
 
