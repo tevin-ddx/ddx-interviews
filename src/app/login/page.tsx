@@ -53,10 +53,10 @@ export default function LoginPage() {
         className="w-full max-w-sm space-y-6 rounded-xl border border-border bg-card p-8"
       >
         <div className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white">
-            CS
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white tracking-tight">
+            d/dx
           </div>
-          <h1 className="text-xl font-semibold">Sign in to CodeStream</h1>
+          <h1 className="text-xl font-semibold">Sign in to d/dx interviews</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Admin panel access
           </p>
@@ -67,7 +67,7 @@ export default function LoginPage() {
             id="email"
             label="Email"
             type="email"
-            placeholder="admin@codestream.dev"
+            placeholder="admin@ddx.dev"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -98,7 +98,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-muted-foreground">
-          Demo: admin@codestream.dev / admin123
+          Demo: admin@codestream.dev / admin123 
         </p>
       </motion.div>
     </div>

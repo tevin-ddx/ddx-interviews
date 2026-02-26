@@ -9,7 +9,7 @@ const JUDGE0_URL = "https://ce.judge0.com/submissions/?base64_encoded=false&wait
 const JUDGE0_LANG: Record<string, number> = { python: 71, cpp: 54 };
 
 const EXEC_TIMEOUT_MS = 30_000;
-const DOCKER_IMAGE = "codestream-runner";
+const DOCKER_IMAGE = "ddx-runner";
 const DOCKER_FALLBACK_PY = "python:3.12-alpine";
 
 const IS_VERCEL = !!process.env.VERCEL;

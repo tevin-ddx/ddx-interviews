@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-**CodeStream** is a collaborative live interview platform built with Next.js 16 (App Router), TypeScript, Tailwind CSS v4, Prisma 7 + PostgreSQL, Monaco Editor, and Framer Motion.
+**d/dx interviews** is a collaborative live interview platform built with Next.js 16 (App Router), TypeScript, Tailwind CSS v4, Prisma 7 + PostgreSQL, Monaco Editor, and Framer Motion.
 
 ### Available scripts
 
@@ -18,7 +18,7 @@ See `package.json`. Key commands: `npm run dev`, `npm run dev:ws`, `npm run buil
 ### Database
 
 - **PostgreSQL** via Docker for local dev, Vercel Postgres for production.
-- Local: `docker run -d --name codestream-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=codestream -p 5432:5432 postgres:16-alpine`
+- Local: `docker run -d --name ddx-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ddx -p 5432:5432 postgres:16-alpine`
 - Prisma 7 uses `@prisma/adapter-pg` (standard `pg` driver). See `src/lib/db.ts`.
 - After pulling: `npx prisma generate && npx prisma migrate dev`.
 - Schema: `prisma/schema.prisma`. Generated client: `src/generated/prisma/` (gitignored).
@@ -30,8 +30,8 @@ Admin login: `admin@codestream.dev` / `admin123`. JWT sessions in HTTP-only cook
 ### Code execution
 
 Supports **Python** and **C++**. The `/api/execute` endpoint uses a 3-tier fallback:
-1. **Docker sandbox** (primary): Custom `codestream-runner` image with Python 3.12 (pandas, numpy, torch), g++ (C++17). Build with `docker build -t codestream-runner -f docker/runner.Dockerfile .`. Requires `sudo chmod 666 /var/run/docker.sock`.
-2. **Piston API** (fallback for Vercel): Free external API at `emkc.org`.
+1. **Docker sandbox** (primary): Custom `ddx-runner` image with Python 3.12 (pandas, numpy, torch), g++ (C++17). Build with `docker build -t ddx-runner -f docker/runner.Dockerfile .`. Requires `sudo chmod 666 /var/run/docker.sock`.
+2. **Vercel Sandbox** (production): Firecracker microVMs with persistent sandbox pool per interview room.
 3. **Local fallback** (dev): `python3` or `g++` via `child_process`.
 
 ### File attachments

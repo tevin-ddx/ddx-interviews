@@ -350,8 +350,8 @@ export default function RoomPage({
           className="w-full max-w-sm space-y-6 rounded-xl border border-border bg-card p-8"
         >
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white">
-              CS
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white tracking-tight">
+              d/dx
             </div>
             <h1 className="text-xl font-semibold">{interview.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -395,8 +395,8 @@ export default function RoomPage({
       {/* Top Bar */}
       <header className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white">
-            CS
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-[8px] font-bold text-white tracking-tight">
+            d/dx
           </div>
           <span className="text-sm font-medium">{interview.title}</span>
         </div>

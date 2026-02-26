@@ -2,10 +2,10 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
 const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "codestream-dev-secret-change-in-prod"
+  process.env.JWT_SECRET || "ddx-dev-secret-change-in-prod"
 );
 
-const COOKIE_NAME = "codestream-session";
+const COOKIE_NAME = "ddx-session";
 
 export async function createSession(userId: string, email: string) {
   const token = await new SignJWT({ userId, email })

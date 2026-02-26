@@ -39,7 +39,7 @@ let currentTheme: Theme = "dark";
 
 function getStoredTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  return (localStorage.getItem("codestream-theme") as Theme) || "dark";
+  return (localStorage.getItem("ddx-theme") as Theme) || "dark";
 }
 
 function subscribe(listener: () => void) {
@@ -59,7 +59,7 @@ function getServerSnapshot(): Theme {
 
 function applyTheme(t: Theme) {
   currentTheme = t;
-  localStorage.setItem("codestream-theme", t);
+  localStorage.setItem("ddx-theme", t);
   const r = resolveTheme(t);
   document.documentElement.classList.toggle("dark", r === "dark");
   listeners.forEach((l) => l());

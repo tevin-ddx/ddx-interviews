@@ -24,11 +24,11 @@ export default function AdminNav() {
     <nav className="flex h-screen w-56 flex-col border-r border-border bg-card">
       <div className="border-b border-border p-4">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
-            CS
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-[10px] font-bold text-white tracking-tight">
+            d/dx
           </div>
           <span className="text-sm font-semibold text-foreground">
-            CodeStream
+            d/dx interviews
           </span>
         </Link>
       </div>

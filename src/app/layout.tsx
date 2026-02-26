@@ -20,7 +20,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CodeStream – Collaborative Live Interview Platform",
+  title: "d/dx interviews – Collaborative Live Interview Platform",
   description:
     "A real-time collaborative coding interview platform with live editing, code execution, and session management.",
 };
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 const themeScript = `
 (function(){
   try {
-    var t = localStorage.getItem('codestream-theme') || 'dark';
+    var t = localStorage.getItem('ddx-theme') || 'dark';
     var d = t === 'system'
       ? (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light')
       : t;

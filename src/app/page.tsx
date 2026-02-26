@@ -21,10 +21,10 @@ export default function Home() {
       {/* Nav */}
       <nav className="flex items-center justify-between border-b border-border/50 px-6 py-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
-            CS
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-[10px] font-bold text-white tracking-tight">
+            d/dx
           </div>
-          <span className="text-sm font-semibold">CodeStream</span>
+          <span className="text-sm font-semibold">d/dx interviews</span>
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
@@ -139,7 +139,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-border/50 py-6 text-center text-xs text-muted-foreground">
-        CodeStream — Built with Next.js, Tailwind CSS, Monaco Editor
+        d/dx interviews — Built with Next.js, Tailwind CSS, Monaco Editor
       </footer>
     </div>
   );
