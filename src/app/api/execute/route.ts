@@ -51,6 +51,7 @@ interface PoolEntry {
   sandbox: any;
   lastUsed: number;
   initialized: boolean;
+  gppInstalled: boolean;
 }
 
 const sandboxPool = new Map<string, PoolEntry>();
@@ -152,6 +153,7 @@ async function getOrCreateSandbox(roomId: string): Promise<PoolEntry> {
     sandbox,
     lastUsed: Date.now(),
     initialized: true,
+    gppInstalled: false,
   };
   sandboxPool.set(roomId, entry);
   return entry;
@@ -173,6 +175,18 @@ async function extractResult(result: any, engine: string): Promise<ExecResult> {
   };
 }
 
+async function ensureGpp(entry: PoolEntry): Promise<void> {
+  if (entry.gppInstalled) return;
+  const check = await entry.sandbox.runCommand("bash", ["-c", "which g++ 2>/dev/null"]);
+  const checkResult = await extractResult(check, "sandbox-persistent");
+  if (checkResult.code === 0) {
+    entry.gppInstalled = true;
+    return;
+  }
+  await entry.sandbox.runCommand("sudo", ["dnf", "install", "-y", "-q", "gcc-c++"]);
+  entry.gppInstalled = true;
+}
+
 async function executePersistent(
   roomId: string,
   code: string,
@@ -180,7 +194,9 @@ async function executePersistent(
   isCell: boolean,
 ): Promise<ExecResult | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const run = async (sandbox: any): Promise<ExecResult> => {
+  const run = async (entry: PoolEntry): Promise<ExecResult> => {
+    const { sandbox } = entry;
+
     if (language === "shell") {
       const r = await sandbox.runCommand("bash", ["-c", code]);
       return extractResult(r, "sandbox-persistent");
@@ -200,12 +216,12 @@ async function executePersistent(
     }
 
     if (language === "cpp") {
+      await ensureGpp(entry);
       await sandbox.writeFiles([
         { path: "/tmp/code.cpp", content: Buffer.from(code) },
       ]);
-      const compile = await sandbox.runCommand("bash", [
-        "-c",
-        "which g++ > /dev/null 2>&1 || sudo dnf install -y -q gcc-c++ > /dev/null 2>&1; g++ -O2 -std=c++17 -o /tmp/prog /tmp/code.cpp",
+      const compile = await sandbox.runCommand("g++", [
+        "-O2", "-std=c++17", "-o", "/tmp/prog", "/tmp/code.cpp",
       ]);
       const compileResult = await extractResult(compile, "sandbox-persistent");
       if (compileResult.code !== 0) return compileResult;
@@ -220,13 +236,13 @@ async function executePersistent(
   try {
     let entry = await getOrCreateSandbox(roomId);
     try {
-      return await run(entry.sandbox);
+      return await run(entry);
     } catch (err) {
       console.error(`[execute] Persistent sandbox command failed, recreating:`, err);
       entry.sandbox.stop().catch(() => {});
       sandboxPool.delete(roomId);
       entry = await getOrCreateSandbox(roomId);
-      return await run(entry.sandbox);
+      return await run(entry);
     }
   } catch (err) {
     console.error(`[execute] Persistent sandbox error:`, err);

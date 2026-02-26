@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import * as Y from "yjs";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import Button from "@/components/ui/Button";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import OutputConsole from "@/components/editor/OutputConsole";
@@ -432,16 +433,15 @@ export default function RoomPage({
       </header>
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
+      <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
         {/* Question Panel */}
-        <AnimatePresence>
-          {showQuestion && interview.question && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="shrink-0 overflow-y-auto border-r border-border bg-background"
+        {showQuestion && interview.question ? (
+          <>
+            <Panel
+              defaultSize="20%"
+              minSize="12%"
+              maxSize="40%"
+              className="overflow-y-auto bg-background"
             >
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -487,158 +487,158 @@ export default function RoomPage({
                   </div>
                 )}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {!showQuestion && interview.question && (
-          <button
-            onClick={() => setShowQuestion(true)}
-            className="flex items-center border-r border-border bg-background px-2 text-xs text-muted-foreground hover:text-foreground/80 cursor-pointer"
-            title="Show question"
-          >
-            ❓
-          </button>
+            </Panel>
+            <PanelResizeHandle className="w-1 bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
+          </>
+        ) : (
+          interview.question && (
+            <button
+              onClick={() => setShowQuestion(true)}
+              className="flex items-center border-r border-border bg-background px-2 text-xs text-muted-foreground hover:text-foreground/80 cursor-pointer"
+              title="Show question"
+            >
+              ❓
+            </button>
+          )
         )}
 
         {/* Editor + Right Panel */}
-        <div className="flex flex-1 overflow-hidden">
-          {mode === "script" ? (
-            <>
+        {mode === "script" ? (
+          <>
+            <Panel defaultSize="55%" minSize="30%" className="overflow-hidden">
+              <CollaborativeEditor
+                roomId={id}
+                userName={userName}
+                initialContent={initialContent}
+                language={language === "cpp" ? "cpp" : "python"}
+                onCodeRef={handleCodeRef}
+                onEvent={handleEditorEvent}
+                onDocReady={handleDocReady}
+              />
+            </Panel>
+            <PanelResizeHandle className="w-1 bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
+            <Panel defaultSize="25%" minSize="15%" maxSize="50%" className="flex flex-col overflow-hidden">
+              {/* Right panel tabs */}
+              {userRole === "interviewer" && (
+                <div className="flex border-b border-border text-xs">
+                  <button
+                    onClick={() => setRightPanel("output")}
+                    className={`flex-1 py-2 transition-colors cursor-pointer ${
+                      rightPanel === "output"
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Output
+                  </button>
+                  <button
+                    onClick={() => setRightPanel("notes")}
+                    className={`flex-1 py-2 transition-colors cursor-pointer ${
+                      rightPanel === "notes"
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Notes
+                  </button>
+                  {hasSolution && (
+                    <button
+                      onClick={() => setRightPanel("solution")}
+                      className={`flex-1 py-2 transition-colors cursor-pointer ${
+                        rightPanel === "solution"
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Solution
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="flex-1 overflow-hidden">
-                <CollaborativeEditor
-                  roomId={id}
-                  userName={userName}
-                  initialContent={initialContent}
-                  language={language === "cpp" ? "cpp" : "python"}
-                  onCodeRef={handleCodeRef}
-                  onEvent={handleEditorEvent}
-                  onDocReady={handleDocReady}
-                />
-              </div>
-              <div className="w-[400px] shrink-0 border-l border-border flex flex-col">
-                {/* Right panel tabs */}
-                {userRole === "interviewer" && (
-                  <div className="flex border-b border-border text-xs">
-                    <button
-                      onClick={() => setRightPanel("output")}
-                      className={`flex-1 py-2 transition-colors cursor-pointer ${
-                        rightPanel === "output"
-                          ? "bg-secondary text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                {rightPanel === "output" && (
+                  <OutputConsole
+                    isRunning={isRunning}
+                    roomId={id}
+                    historyArray={sharedHistory}
+                    ydoc={sharedDoc}
+                    userName={userName}
+                  />
+                )}
+
+                {rightPanel === "notes" && userRole === "interviewer" && (
+                  <div className="flex h-full flex-col p-3 gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Private notes — only visible to you
+                    </p>
+                    <textarea
+                      value={noteContent}
+                      onChange={(e) => setNoteContent(e.target.value)}
+                      className="flex-1 resize-none rounded-lg border border-input bg-card p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="Take notes during the interview..."
+                    />
+                    <Button
+                      onClick={saveNote}
+                      disabled={noteSaving}
+                      size="sm"
+                      variant="secondary"
                     >
-                      Output
-                    </button>
-                    <button
-                      onClick={() => setRightPanel("notes")}
-                      className={`flex-1 py-2 transition-colors cursor-pointer ${
-                        rightPanel === "notes"
-                          ? "bg-secondary text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Notes
-                    </button>
-                    {hasSolution && (
-                      <button
-                        onClick={() => setRightPanel("solution")}
-                        className={`flex-1 py-2 transition-colors cursor-pointer ${
-                          rightPanel === "solution"
-                            ? "bg-secondary text-foreground"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Solution
-                      </button>
-                    )}
+                      {noteSaving ? "Saving..." : "Save Notes"}
+                    </Button>
                   </div>
                 )}
 
-                <div className="flex-1 overflow-hidden">
-                  {rightPanel === "output" && (
-                    <OutputConsole
-                      isRunning={isRunning}
-                      roomId={id}
-                      historyArray={sharedHistory}
-                      ydoc={sharedDoc}
-                      userName={userName}
-                    />
-                  )}
-
-                  {rightPanel === "notes" && userRole === "interviewer" && (
-                    <div className="flex h-full flex-col p-3 gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        Private notes — only visible to you
-                      </p>
-                      <textarea
-                        value={noteContent}
-                        onChange={(e) => setNoteContent(e.target.value)}
-                        className="flex-1 resize-none rounded-lg border border-input bg-card p-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="Take notes during the interview..."
-                      />
-                      <Button
-                        onClick={saveNote}
-                        disabled={noteSaving}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        {noteSaving ? "Saving..." : "Save Notes"}
-                      </Button>
+                {rightPanel === "solution" &&
+                  userRole === "interviewer" &&
+                  hasSolution && (
+                    <div className="flex h-full flex-col">
+                      {showSolution ? (
+                        <>
+                          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Reference Solution
+                            </span>
+                            <button
+                              onClick={() => setShowSolution(false)}
+                              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              Hide
+                            </button>
+                          </div>
+                          <pre className="flex-1 overflow-auto p-4 font-mono text-sm text-foreground/90 bg-card">
+                            {interview.question!.solutionCode}
+                          </pre>
+                        </>
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                          <p className="text-sm text-muted-foreground">
+                            Solution is hidden
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setShowSolution(true)}
+                          >
+                            Reveal Solution
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  {rightPanel === "solution" &&
-                    userRole === "interviewer" &&
-                    hasSolution && (
-                      <div className="flex h-full flex-col">
-                        {showSolution ? (
-                          <>
-                            <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-                              <span className="text-xs font-medium text-muted-foreground">
-                                Reference Solution
-                              </span>
-                              <button
-                                onClick={() => setShowSolution(false)}
-                                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                              >
-                                Hide
-                              </button>
-                            </div>
-                            <pre className="flex-1 overflow-auto p-4 font-mono text-sm text-foreground/90 bg-card">
-                              {interview.question!.solutionCode}
-                            </pre>
-                          </>
-                        ) : (
-                          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                            <p className="text-sm text-muted-foreground">
-                              Solution is hidden
-                            </p>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => setShowSolution(true)}
-                            >
-                              Reveal Solution
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                </div>
               </div>
-            </>
-          ) : (
-            <div className="flex-1 overflow-hidden">
-              <NotebookEditor
-                roomId={id}
-                userName={userName}
-                language={language === "cpp" ? "cpp" : "python"}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+            </Panel>
+          </>
+        ) : (
+          <Panel defaultSize="80%" minSize="50%" className="overflow-hidden">
+            <NotebookEditor
+              roomId={id}
+              userName={userName}
+              language={language === "cpp" ? "cpp" : "python"}
+            />
+          </Panel>
+        )}
+      </PanelGroup>
 
       {/* End Interview Confirmation Modal */}
       <AnimatePresence>
