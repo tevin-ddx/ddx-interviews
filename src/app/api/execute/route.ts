@@ -42,7 +42,202 @@ interface ExecResult {
   engine: string;
 }
 
-// --- Vercel Sandbox execution (Firecracker microVM) ---
+// =============================================================================
+// Persistent sandbox pool — kept alive across warm function invocations
+// =============================================================================
+
+interface PoolEntry {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sandbox: any;
+  lastUsed: number;
+  initialized: boolean;
+}
+
+const sandboxPool = new Map<string, PoolEntry>();
+const POOL_IDLE_MS = 20 * 60 * 1000; // evict after 20 min idle
+const SANDBOX_LIFETIME_MS = 25 * 60 * 1000; // VM timeout 25 min
+
+// Python cell runner: persists namespace between cells via pickle
+const CELL_RUNNER_PY = `
+import sys, pickle, io, traceback, types, importlib
+
+NS_FILE = '/tmp/_ns.pkl'
+CODE_FILE = '/tmp/_cell.py'
+
+ns = {'__builtins__': __builtins__}
+try:
+    with open(NS_FILE, 'rb') as _f:
+        ns.update(pickle.load(_f))
+except Exception:
+    pass
+
+with open(CODE_FILE) as _f:
+    _code = _f.read()
+
+try:
+    _compiled = compile(_code, '<cell>', 'exec')
+    exec(_compiled, ns)
+except SystemExit:
+    pass
+except Exception:
+    traceback.print_exc()
+
+_to_save = {}
+for _k, _v in ns.items():
+    if _k.startswith('_'):
+        continue
+    try:
+        pickle.dumps(_v)
+        _to_save[_k] = _v
+    except Exception:
+        if isinstance(_v, types.ModuleType):
+            _to_save[_k] = importlib.import_module(_v.__name__)
+            continue
+try:
+    with open(NS_FILE, 'wb') as _f:
+        pickle.dump(_to_save, _f)
+except Exception:
+    pass
+`.trim();
+
+function cleanupPool() {
+  const now = Date.now();
+  for (const [id, entry] of sandboxPool) {
+    if (now - entry.lastUsed > POOL_IDLE_MS) {
+      entry.sandbox.stop().catch(() => {});
+      sandboxPool.delete(id);
+    }
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createSandbox(): Promise<any> {
+  const { Sandbox } = await import("@vercel/sandbox");
+  const snapshotId = process.env.SANDBOX_SNAPSHOT_ID;
+
+  try {
+    return snapshotId
+      ? await Sandbox.create({
+          source: { type: "snapshot" as const, snapshotId },
+          timeout: SANDBOX_LIFETIME_MS,
+        })
+      : await Sandbox.create({
+          runtime: "python3.13",
+          timeout: SANDBOX_LIFETIME_MS,
+        });
+  } catch {
+    return await Sandbox.create({
+      runtime: "python3.13",
+      timeout: SANDBOX_LIFETIME_MS,
+    });
+  }
+}
+
+async function getOrCreateSandbox(roomId: string): Promise<PoolEntry> {
+  cleanupPool();
+
+  const existing = sandboxPool.get(roomId);
+  if (existing) {
+    existing.lastUsed = Date.now();
+    return existing;
+  }
+
+  const sandbox = await createSandbox();
+
+  await sandbox.writeFiles([
+    { path: "/tmp/_cell_runner.py", content: Buffer.from(CELL_RUNNER_PY) },
+  ]);
+
+  const entry: PoolEntry = {
+    sandbox,
+    lastUsed: Date.now(),
+    initialized: true,
+  };
+  sandboxPool.set(roomId, entry);
+  return entry;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function extractResult(result: any, engine: string): Promise<ExecResult> {
+  const rawStdout = typeof result.stdout === "function" ? result.stdout() : result.stdout;
+  const rawStderr = typeof result.stderr === "function" ? result.stderr() : result.stderr;
+  const stdout = (await rawStdout) || "";
+  const stderr = (await rawStderr) || "";
+  return {
+    stdout,
+    stderr,
+    code: result.exitCode ?? 1,
+    signal: null,
+    output: stdout + stderr,
+    engine,
+  };
+}
+
+async function executePersistent(
+  roomId: string,
+  code: string,
+  language: string,
+  isCell: boolean,
+): Promise<ExecResult | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const run = async (sandbox: any): Promise<ExecResult> => {
+    if (language === "shell") {
+      const r = await sandbox.runCommand("bash", ["-c", code]);
+      return extractResult(r, "sandbox-persistent");
+    }
+
+    if (language === "python" && isCell) {
+      await sandbox.writeFiles([
+        { path: "/tmp/_cell.py", content: Buffer.from(code) },
+      ]);
+      const r = await sandbox.runCommand("python3", ["/tmp/_cell_runner.py"]);
+      return extractResult(r, "sandbox-persistent");
+    }
+
+    if (language === "python") {
+      const r = await sandbox.runCommand("python3", ["-c", code]);
+      return extractResult(r, "sandbox-persistent");
+    }
+
+    if (language === "cpp") {
+      await sandbox.writeFiles([
+        { path: "/tmp/code.cpp", content: Buffer.from(code) },
+      ]);
+      const compile = await sandbox.runCommand("bash", [
+        "-c",
+        "which g++ > /dev/null 2>&1 || sudo dnf install -y -q gcc-c++ > /dev/null 2>&1; g++ -O2 -std=c++17 -o /tmp/prog /tmp/code.cpp",
+      ]);
+      const compileResult = await extractResult(compile, "sandbox-persistent");
+      if (compileResult.code !== 0) return compileResult;
+
+      const r = await sandbox.runCommand("/tmp/prog", []);
+      return extractResult(r, "sandbox-persistent");
+    }
+
+    throw new Error(`Unsupported language: ${language}`);
+  };
+
+  try {
+    let entry = await getOrCreateSandbox(roomId);
+    try {
+      return await run(entry.sandbox);
+    } catch (err) {
+      console.error(`[execute] Persistent sandbox command failed, recreating:`, err);
+      entry.sandbox.stop().catch(() => {});
+      sandboxPool.delete(roomId);
+      entry = await getOrCreateSandbox(roomId);
+      return await run(entry.sandbox);
+    }
+  } catch (err) {
+    console.error(`[execute] Persistent sandbox error:`, err);
+    sandboxPool.delete(roomId);
+    return null;
+  }
+}
+
+// =============================================================================
+// Ephemeral Vercel Sandbox execution (original, no roomId)
+// =============================================================================
 
 async function executeSandbox(
   code: string,
@@ -78,30 +273,12 @@ async function executeSandbox(
     try {
       if (language === "shell") {
         const result = await sandbox.runCommand("bash", ["-c", code]);
-        const stdout = (await result.stdout()) || "";
-        const stderr = (await result.stderr()) || "";
-        return {
-          stdout,
-          stderr,
-          code: result.exitCode ?? 1,
-          signal: null,
-          output: stdout + stderr,
-          engine: "sandbox",
-        };
+        return extractResult(result, "sandbox");
       }
 
       if (language === "python") {
         const result = await sandbox.runCommand("python3", ["-c", code]);
-        const stdout = (await result.stdout()) || "";
-        const stderr = (await result.stderr()) || "";
-        return {
-          stdout,
-          stderr,
-          code: result.exitCode ?? 1,
-          signal: null,
-          output: stdout + stderr,
-          engine: "sandbox",
-        };
+        return extractResult(result, "sandbox");
       }
 
       if (language === "cpp") {
@@ -115,16 +292,7 @@ async function executeSandbox(
           "-c",
           "g++ -O2 -std=c++17 -o /tmp/prog code.cpp && /tmp/prog",
         ]);
-        const stdout = (await result.stdout()) || "";
-        const stderr = (await result.stderr()) || "";
-        return {
-          stdout,
-          stderr,
-          code: result.exitCode ?? 1,
-          signal: null,
-          output: stdout + stderr,
-          engine: "sandbox",
-        };
+        return extractResult(result, "sandbox");
       }
     } finally {
       sandbox.stop().catch(() => {});
@@ -136,7 +304,9 @@ async function executeSandbox(
   return null;
 }
 
-// --- Docker execution (local dev) ---
+// =============================================================================
+// Docker execution (local dev)
+// =============================================================================
 
 function dockerExec(
   cmd: string,
@@ -212,7 +382,9 @@ async function executeDockerCpp(code: string): Promise<ExecResult | null> {
   return result;
 }
 
-// --- Judge0 CE API (free fallback) ---
+// =============================================================================
+// Judge0 CE API (free fallback)
+// =============================================================================
 
 async function executeJudge0(
   code: string,
@@ -258,7 +430,9 @@ async function executeJudge0(
   }
 }
 
-// --- Local execution (dev only) ---
+// =============================================================================
+// Local execution (dev only)
+// =============================================================================
 
 async function executeLocalPython(code: string): Promise<ExecResult> {
   const filename = join(tmpdir(), `cs_${randomUUID()}.py`);
@@ -310,14 +484,16 @@ async function executeLocalCpp(code: string): Promise<ExecResult> {
   });
 }
 
-// --- Route handler ---
-// Fallback chain: Docker → Vercel Sandbox → Judge0 → local
+// =============================================================================
+// Route handler
+// =============================================================================
 
 export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {
-    const { code, language = "python" } = await request.json();
+    const body = await request.json();
+    const { code, language = "python", roomId, cell } = body;
 
     if (!code || !code.trim()) {
       return NextResponse.json(
@@ -326,25 +502,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Persistent sandbox when roomId is provided (Vercel production)
+    if (roomId && IS_VERCEL) {
+      const result = await executePersistent(roomId, code, language, !!cell);
+      if (result) return NextResponse.json(result);
+    }
+
     // 1. Docker (local dev with Docker running)
     const dockerResult =
       language === "cpp"
         ? await executeDockerCpp(code)
-        : await executeDockerPython(code);
+        : language === "shell"
+          ? null
+          : await executeDockerPython(code);
     if (dockerResult) return NextResponse.json(dockerResult);
 
-    // 2. Vercel Sandbox (production on Vercel)
+    // 2. Vercel Sandbox (production, ephemeral fallback)
     if (IS_VERCEL) {
       const sandboxResult = await executeSandbox(code, language);
       if (sandboxResult) return NextResponse.json(sandboxResult);
     }
 
     // 3. Judge0 CE API (free public fallback)
-    const judge0Result = await executeJudge0(code, language);
-    if (judge0Result) return NextResponse.json(judge0Result);
+    if (language !== "shell") {
+      const judge0Result = await executeJudge0(code, language);
+      if (judge0Result) return NextResponse.json(judge0Result);
+    }
 
     // 4. Local execution (dev only, needs python3/g++ installed)
-    if (!IS_VERCEL) {
+    if (!IS_VERCEL && language !== "shell") {
       const localResult =
         language === "cpp"
           ? await executeLocalCpp(code)

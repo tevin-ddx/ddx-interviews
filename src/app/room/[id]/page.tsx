@@ -228,7 +228,7 @@ export default function RoomPage({
       const res = await fetch("/api/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language }),
+        body: JSON.stringify({ code, language, roomId: id }),
       });
       const result = await res.json();
       updateOutput({
@@ -556,6 +556,7 @@ export default function RoomPage({
                       isRunning={isRunning}
                       exitCode={exitCode}
                       executionTime={executionTime}
+                      roomId={id}
                     />
                   )}
 

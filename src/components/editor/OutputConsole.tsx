@@ -20,7 +20,7 @@ interface OutputConsoleProps {
   isRunning: boolean;
   exitCode?: number | null;
   executionTime?: number | null;
-  language?: string;
+  roomId?: string;
   onTerminalCommand?: (command: string) => void;
 }
 
@@ -30,6 +30,7 @@ export default function OutputConsole({
   isRunning,
   exitCode,
   executionTime,
+  roomId,
   onTerminalCommand,
 }: OutputConsoleProps) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -95,7 +96,7 @@ export default function OutputConsole({
         const res = await fetch("/api/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: cmd, language: "shell" }),
+          body: JSON.stringify({ code: cmd, language: "shell", roomId }),
         });
         const result = await res.json();
 
@@ -130,7 +131,7 @@ export default function OutputConsole({
         setRunningCmd(false);
       }
     },
-    [onTerminalCommand],
+    [onTerminalCommand, roomId],
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

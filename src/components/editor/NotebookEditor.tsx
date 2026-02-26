@@ -186,12 +186,8 @@ export default function NotebookEditor({
       }
       if (cellIndex === -1) return;
 
-      const codeParts: string[] = [];
-      for (let i = 0; i <= cellIndex; i++) {
-        const yText = arr.get(i).get("code") as Y.Text;
-        codeParts.push(yText.toString());
-      }
-      const fullCode = codeParts.join("\n");
+      const yText = arr.get(cellIndex).get("code") as Y.Text;
+      const cellCode = yText.toString();
 
       const cellMap = arr.get(cellIndex);
       const outputMap = cellMap.get("output") as Y.Map<unknown>;
@@ -209,7 +205,12 @@ export default function NotebookEditor({
         const res = await fetch("/api/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: fullCode, language }),
+          body: JSON.stringify({
+            code: cellCode,
+            language,
+            roomId,
+            cell: true,
+          }),
         });
         const result = await res.json();
         docRef.current?.transact(() => {
@@ -228,7 +229,7 @@ export default function NotebookEditor({
         });
       }
     },
-    [language],
+    [language, roomId],
   );
 
   if (!roomId) {
