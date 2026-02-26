@@ -100,6 +100,13 @@ export default function NotebookEditor({
   const initializedRef = useRef(false);
   const colorRef = useRef(CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)]);
 
+  const [focusedIdx, setFocusedIdx] = useState(0);
+  const [editMode, setEditMode] = useState(true);
+  const cellEditorsRef = useRef<Map<string, editor.IStandaloneCodeEditor>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cellRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const lastDKeyRef = useRef(0);
+
   const syncCellViews = useCallback(() => {
     const arr = cellsArrayRef.current;
     if (!arr) return;
@@ -237,6 +244,13 @@ export default function NotebookEditor({
     };
   }, [roomId, userName, syncCellViews]);
 
+  const addCellAtIndex = useCallback((index: number) => {
+    const doc = docRef.current;
+    const arr = cellsArrayRef.current;
+    if (!doc || !arr) return;
+    addCellToDocAt(doc, arr, index);
+  }, []);
+
   const addCell = useCallback(() => {
     const doc = docRef.current;
     const arr = cellsArrayRef.current;
@@ -316,6 +330,99 @@ export default function NotebookEditor({
     [language, roomId],
   );
 
+  const focusCellEditor = useCallback((idx: number) => {
+    const c = cells[idx];
+    if (!c) return;
+    const ed = cellEditorsRef.current.get(c.id);
+    if (ed) {
+      ed.focus();
+      setEditMode(true);
+    }
+    const el = cellRefsMap.current.get(c.id);
+    if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setFocusedIdx(idx);
+  }, [cells]);
+
+  const selectCell = useCallback((idx: number) => {
+    setFocusedIdx(idx);
+    setEditMode(false);
+    const c = cells[idx];
+    if (c) {
+      const el = cellRefsMap.current.get(c.id);
+      if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    containerRef.current?.focus();
+  }, [cells]);
+
+  // Shift+Enter: run and move to next
+  const handleShiftEnter = useCallback((cellId: string) => {
+    runCell(cellId);
+    const idx = cells.findIndex((c) => c.id === cellId);
+    if (idx === cells.length - 1) {
+      addCell();
+      setTimeout(() => focusCellEditor(idx + 1), 100);
+    } else {
+      focusCellEditor(idx + 1);
+    }
+  }, [cells, runCell, addCell, focusCellEditor]);
+
+  // Alt+Enter: run and insert below
+  const handleAltEnter = useCallback((cellId: string) => {
+    runCell(cellId);
+    const idx = cells.findIndex((c) => c.id === cellId);
+    addCellAtIndex(idx + 1);
+    setTimeout(() => focusCellEditor(idx + 1), 100);
+  }, [cells, runCell, addCellAtIndex, focusCellEditor]);
+
+  // Command mode keyboard handler
+  const handleContainerKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (editMode) return;
+
+    switch (e.key) {
+      case "Enter":
+        e.preventDefault();
+        focusCellEditor(focusedIdx);
+        break;
+      case "ArrowUp":
+      case "k":
+        e.preventDefault();
+        if (focusedIdx > 0) selectCell(focusedIdx - 1);
+        break;
+      case "ArrowDown":
+      case "j":
+        e.preventDefault();
+        if (focusedIdx < cells.length - 1) selectCell(focusedIdx + 1);
+        break;
+      case "a":
+        e.preventDefault();
+        addCellAtIndex(focusedIdx);
+        setTimeout(() => focusCellEditor(focusedIdx), 100);
+        break;
+      case "b":
+        e.preventDefault();
+        addCellAtIndex(focusedIdx + 1);
+        setTimeout(() => focusCellEditor(focusedIdx + 1), 100);
+        break;
+      case "d": {
+        const now = Date.now();
+        if (now - lastDKeyRef.current < 500) {
+          e.preventDefault();
+          const c = cells[focusedIdx];
+          if (c && cells.length > 1) {
+            removeCell(c.id);
+            if (focusedIdx >= cells.length - 1) {
+              selectCell(Math.max(0, focusedIdx - 1));
+            }
+          }
+          lastDKeyRef.current = 0;
+        } else {
+          lastDKeyRef.current = now;
+        }
+        break;
+      }
+    }
+  }, [editMode, focusedIdx, cells, focusCellEditor, selectCell, addCellAtIndex, removeCell]);
+
   if (!roomId) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
@@ -325,13 +432,21 @@ export default function NotebookEditor({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex h-full flex-col overflow-hidden outline-none"
+      tabIndex={0}
+      onKeyDown={handleContainerKeyDown}
+    >
       <div className="flex items-center gap-2 border-b border-border bg-background px-3 py-1.5">
         <div
           className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-zinc-600"}`}
         />
         <span className="text-[10px] text-muted-foreground">
           {connected ? (peers.length > 0 ? "Live" : "Ready") : "Connecting..."}
+        </span>
+        <span className="text-[10px] text-muted-foreground/40 ml-2">
+          {editMode ? "Edit" : "Command"} mode
         </span>
         <div className="flex items-center gap-1 ml-auto">
           <span
@@ -361,8 +476,17 @@ export default function NotebookEditor({
             awareness={awareness}
             language={language}
             canRemove={cells.length > 1}
+            isFocused={index === focusedIdx}
+            isEditMode={index === focusedIdx && editMode}
             onRun={() => runCell(cell.id)}
             onRemove={() => removeCell(cell.id)}
+            onShiftEnter={() => handleShiftEnter(cell.id)}
+            onCtrlEnter={() => runCell(cell.id)}
+            onAltEnter={() => handleAltEnter(cell.id)}
+            onEscape={() => { setEditMode(false); containerRef.current?.focus(); }}
+            onFocused={() => { setFocusedIdx(index); setEditMode(true); }}
+            registerEditor={(ed) => { cellEditorsRef.current.set(cell.id, ed); }}
+            registerRef={(el) => { if (el) cellRefsMap.current.set(cell.id, el); }}
           />
         ))}
 
@@ -395,6 +519,22 @@ function addCellToDoc(doc: Y.Doc, arr: Y.Array<Y.Map<unknown>>, source = "") {
   });
 }
 
+function addCellToDocAt(doc: Y.Doc, arr: Y.Array<Y.Map<unknown>>, index: number) {
+  doc.transact(() => {
+    const cellMap = new Y.Map<unknown>();
+    cellMap.set("id", crypto.randomUUID());
+    cellMap.set("code", new Y.Text());
+    const outputMap = new Y.Map<unknown>();
+    outputMap.set("stdout", "");
+    outputMap.set("stderr", "");
+    outputMap.set("exitCode", null);
+    outputMap.set("isRunning", 0);
+    outputMap.set("executionTime", null);
+    cellMap.set("output", outputMap);
+    arr.insert(index, [cellMap]);
+  });
+}
+
 interface NotebookCellProps {
   cell: CellView;
   index: number;
@@ -402,8 +542,17 @@ interface NotebookCellProps {
   awareness: any;
   language: string;
   canRemove: boolean;
+  isFocused: boolean;
+  isEditMode: boolean;
   onRun: () => void;
   onRemove: () => void;
+  onShiftEnter: () => void;
+  onCtrlEnter: () => void;
+  onAltEnter: () => void;
+  onEscape: () => void;
+  onFocused: () => void;
+  registerEditor: (ed: editor.IStandaloneCodeEditor) => void;
+  registerRef: (el: HTMLDivElement | null) => void;
 }
 
 const MIN_CELL_HEIGHT = 40;
@@ -415,8 +564,17 @@ function NotebookCell({
   awareness,
   language,
   canRemove,
+  isFocused,
+  isEditMode,
   onRun,
   onRemove,
+  onShiftEnter,
+  onCtrlEnter,
+  onAltEnter,
+  onEscape,
+  onFocused,
+  registerEditor,
+  registerRef,
 }: NotebookCellProps) {
   const bindingRef = useRef<{ destroy: () => void } | null>(null);
   const editorInstanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -432,11 +590,41 @@ function NotebookCell({
   const handleMount: OnMount = useCallback(
     async (editorInstance) => {
       editorInstanceRef.current = editorInstance;
+      registerEditor(editorInstance);
       const model = editorInstance.getModel();
       if (!model) return;
 
       updateHeight(editorInstance);
       editorInstance.onDidContentSizeChange(() => updateHeight(editorInstance));
+
+      // Shift+Enter: run and move to next
+      editorInstance.addCommand(
+        // eslint-disable-next-line no-bitwise
+        (await import("monaco-editor")).KeyMod.Shift | (await import("monaco-editor")).KeyCode.Enter,
+        () => onShiftEnter(),
+      );
+
+      // Ctrl/Cmd+Enter: run cell in place
+      editorInstance.addCommand(
+        // eslint-disable-next-line no-bitwise
+        (await import("monaco-editor")).KeyMod.CtrlCmd | (await import("monaco-editor")).KeyCode.Enter,
+        () => onCtrlEnter(),
+      );
+
+      // Alt+Enter: run and insert new cell below
+      editorInstance.addCommand(
+        // eslint-disable-next-line no-bitwise
+        (await import("monaco-editor")).KeyMod.Alt | (await import("monaco-editor")).KeyCode.Enter,
+        () => onAltEnter(),
+      );
+
+      // Escape: exit edit mode
+      editorInstance.addCommand(
+        (await import("monaco-editor")).KeyCode.Escape,
+        () => onEscape(),
+      );
+
+      editorInstance.onDidFocusEditorWidget(() => onFocused());
 
       try {
         const { MonacoBinding } = await import("y-monaco");
@@ -454,7 +642,7 @@ function NotebookCell({
         // Fallback: no collaborative binding
       }
     },
-    [cell.yText, awareness, updateHeight],
+    [cell.yText, awareness, updateHeight, onShiftEnter, onCtrlEnter, onAltEnter, onEscape, onFocused, registerEditor],
   );
 
   useEffect(() => {
@@ -466,8 +654,18 @@ function NotebookCell({
   const hasOutput =
     cell.output.stdout || cell.output.stderr || cell.output.isRunning;
 
+  const borderColor = isFocused
+    ? isEditMode
+      ? "border-emerald-500"
+      : "border-indigo-500"
+    : "border-border";
+
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div
+      ref={registerRef}
+      className={`rounded-lg border-2 bg-card overflow-hidden transition-colors ${borderColor}`}
+      onClick={onFocused}
+    >
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="text-xs text-muted-foreground font-mono">
           In [{index + 1}]
@@ -476,13 +674,13 @@ function NotebookCell({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onRun}
+            onClick={(e) => { e.stopPropagation(); onRun(); }}
             disabled={cell.output.isRunning}
           >
             {cell.output.isRunning ? "Running..." : "▶ Run"}
           </Button>
           {canRemove && (
-            <Button variant="ghost" size="sm" onClick={onRemove}>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemove(); }}>
               ✕
             </Button>
           )}
