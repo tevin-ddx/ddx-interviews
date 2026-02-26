@@ -61,7 +61,7 @@ model InterviewEvent {
   id          String   @id @default(uuid())
   interviewId String
   interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  timestamp   Int
+  timestamp   BigInt
   userName    String
   type        String   @default("edit")
   content     String

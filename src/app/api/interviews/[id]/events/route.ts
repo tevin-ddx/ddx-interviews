@@ -10,7 +10,13 @@ export async function GET(
     where: { interviewId: id },
     orderBy: { timestamp: "asc" },
   });
-  return NextResponse.json(events);
+
+  const serialized = events.map((e) => ({
+    ...e,
+    timestamp: Number(e.timestamp),
+  }));
+
+  return NextResponse.json(serialized);
 }
 
 export async function POST(
@@ -34,7 +40,7 @@ export async function POST(
     await prisma.interviewEvent.createMany({
       data: events.map((e) => ({
         interviewId: id,
-        timestamp: e.timestamp,
+        timestamp: BigInt(e.timestamp),
         userName: e.userName,
         type: e.type || "edit",
         content: e.content,

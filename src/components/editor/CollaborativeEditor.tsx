@@ -120,18 +120,6 @@ export default function CollaborativeEditor({
         initializedRef.current = true;
       };
 
-      doc.on("update", (_update: Uint8Array, origin: unknown) => {
-        if (origin === "remote") return;
-        if (onEvent) {
-          onEvent({
-            timestamp: Date.now(),
-            userName,
-            type: "edit",
-            content: yText.toString(),
-          });
-        }
-      });
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let awareness: any = undefined;
 
@@ -145,6 +133,21 @@ export default function CollaborativeEditor({
         });
 
         providerRef.current = provider;
+
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        doc.on("update", (_update: Uint8Array, origin: unknown) => {
+          if (origin === provider) return;
+          if (!onEvent) return;
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            onEvent({
+              timestamp: Date.now(),
+              userName,
+              type: "edit",
+              content: yText.toString(),
+            });
+          }, 400);
+        });
         awareness = provider.awareness;
 
         provider.awareness.setLocalStateField("user", {
@@ -185,6 +188,19 @@ export default function CollaborativeEditor({
           setPeers(peerList);
         });
       } catch {
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        doc.on("update", () => {
+          if (!onEvent) return;
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            onEvent({
+              timestamp: Date.now(),
+              userName,
+              type: "edit",
+              content: yText.toString(),
+            });
+          }, 400);
+        });
         tryInitializeContent();
         setConnected(true);
       }
