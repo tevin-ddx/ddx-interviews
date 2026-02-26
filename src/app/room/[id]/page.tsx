@@ -78,11 +78,7 @@ export default function RoomPage({
   const { id } = use(params);
   const router = useRouter();
   const [interview, setInterview] = useState<Interview | null>(null);
-  const [output, setOutput] = useState("");
-  const [stderr, setStderr] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [exitCode, setExitCode] = useState<number | null>(null);
-  const [executionTime, setExecutionTime] = useState<number | null>(null);
   const [mode, setMode] = useState<EditorMode>("script");
   const [language, setLanguage] = useState<string>("python");
   const [showQuestion, setShowQuestion] = useState(true);
@@ -101,6 +97,7 @@ export default function RoomPage({
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
   const outputMapRef = useRef<Y.Map<string | number | null> | null>(null);
+  const historyArrayRef = useRef<Y.Array<Record<string, unknown>> | null>(null);
 
   useEffect(() => {
     fetch(`/api/interviews/${id}`)
@@ -174,17 +171,11 @@ export default function RoomPage({
     const outputMap = doc.getMap<string | number | null>("executionOutput");
     outputMapRef.current = outputMap;
 
-    outputMap.observe(() => {
-      const stdout = (outputMap.get("stdout") as string) ?? "";
-      const stderr = (outputMap.get("stderr") as string) ?? "";
-      const code = outputMap.get("exitCode") as number | null;
-      const time = outputMap.get("executionTime") as number | null;
-      const running = outputMap.get("isRunning") as number;
+    const historyArray = doc.getArray<Record<string, unknown>>("terminalHistory");
+    historyArrayRef.current = historyArray;
 
-      setOutput(stdout);
-      setStderr(stderr);
-      setExitCode(code);
-      setExecutionTime(time);
+    outputMap.observe(() => {
+      const running = outputMap.get("isRunning") as number;
       setIsRunning(running === 1);
       if (running === 1) setRightPanel("output");
     });
@@ -199,28 +190,16 @@ export default function RoomPage({
     if (!code.trim()) return;
 
     const map = outputMapRef.current;
-    const updateOutput = (vals: Record<string, string | number | null>) => {
+    const setRunning = (val: number) => {
       if (map) {
-        ydocRef.current?.transact(() => {
-          for (const [k, v] of Object.entries(vals)) map.set(k, v);
-        });
+        ydocRef.current?.transact(() => map.set("isRunning", val));
       } else {
-        if (vals.stdout !== undefined) setOutput(vals.stdout as string);
-        if (vals.stderr !== undefined) setStderr(vals.stderr as string);
-        if (vals.exitCode !== undefined) setExitCode(vals.exitCode as number | null);
-        if (vals.executionTime !== undefined) setExecutionTime(vals.executionTime as number | null);
-        if (vals.isRunning !== undefined) setIsRunning(vals.isRunning === 1);
+        setIsRunning(val === 1);
       }
     };
 
     setRightPanel("output");
-    updateOutput({
-      isRunning: 1,
-      stdout: "",
-      stderr: "",
-      exitCode: null,
-      executionTime: null,
-    });
+    setRunning(1);
 
     const start = Date.now();
 
@@ -231,22 +210,47 @@ export default function RoomPage({
         body: JSON.stringify({ code, language, roomId: id }),
       });
       const result = await res.json();
-      updateOutput({
-        isRunning: 0,
+      setRunning(0);
+
+      const entry = {
+        id: crypto.randomUUID(),
+        type: "code_run",
+        input: "Run code",
         stdout: result.stdout || "",
         stderr: result.stderr || result.error || "",
         exitCode: result.code ?? -1,
         executionTime: Date.now() - start,
-      });
+        timestamp: Date.now(),
+        userName,
+      };
+
+      if (historyArrayRef.current) {
+        ydocRef.current?.transact(() => {
+          historyArrayRef.current!.push([entry]);
+        });
+      }
     } catch {
-      updateOutput({
-        isRunning: 0,
+      setRunning(0);
+
+      const entry = {
+        id: crypto.randomUUID(),
+        type: "code_run",
+        input: "Run code",
+        stdout: "",
         stderr: "Execution failed - check your connection",
         exitCode: -1,
         executionTime: Date.now() - start,
-      });
+        timestamp: Date.now(),
+        userName,
+      };
+
+      if (historyArrayRef.current) {
+        ydocRef.current?.transact(() => {
+          historyArrayRef.current!.push([entry]);
+        });
+      }
     }
-  }, [language]);
+  }, [language, userName]);
 
   const endInterview = async () => {
     const finalCode = codeGetterRef.current ? codeGetterRef.current() : "";
@@ -551,12 +555,11 @@ export default function RoomPage({
                 <div className="flex-1 overflow-hidden">
                   {rightPanel === "output" && (
                     <OutputConsole
-                      output={output}
-                      stderr={stderr}
                       isRunning={isRunning}
-                      exitCode={exitCode}
-                      executionTime={executionTime}
                       roomId={id}
+                      historyArray={historyArrayRef.current}
+                      ydoc={ydocRef.current}
+                      userName={userName}
                     />
                   )}
 

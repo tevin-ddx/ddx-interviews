@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { motion } from "framer-motion";
+import * as Y from "yjs";
 
 interface HistoryEntry {
   id: string;
@@ -12,26 +13,32 @@ interface HistoryEntry {
   exitCode: number | null;
   executionTime: number | null;
   timestamp: number;
+  userName?: string;
 }
 
 interface OutputConsoleProps {
-  output: string;
-  stderr: string;
   isRunning: boolean;
+  roomId?: string;
+  userName?: string;
+  historyArray?: Y.Array<Record<string, unknown>> | null;
+  ydoc?: Y.Doc | null;
+  // Legacy props for standalone use (notebook cells)
+  output?: string;
+  stderr?: string;
   exitCode?: number | null;
   executionTime?: number | null;
-  roomId?: string;
-  onTerminalCommand?: (command: string) => void;
 }
 
 export default function OutputConsole({
+  isRunning,
+  roomId,
+  userName,
+  historyArray,
+  ydoc,
   output,
   stderr,
-  isRunning,
   exitCode,
   executionTime,
-  roomId,
-  onTerminalCommand,
 }: OutputConsoleProps) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [terminalInput, setTerminalInput] = useState("");
@@ -40,41 +47,68 @@ export default function OutputConsole({
   const [runningCmd, setRunningCmd] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Legacy mode: track output/stderr props for notebook cell inline output
   const lastOutputRef = useRef<string>("");
   const lastStderrRef = useRef<string>("");
 
   useEffect(() => {
+    if (historyArray) return; // shared mode — skip legacy
     if (isRunning) return;
-
     const hasOutput = output || stderr;
     const isSame =
       output === lastOutputRef.current && stderr === lastStderrRef.current;
-
     if (hasOutput && !isSame) {
-      lastOutputRef.current = output;
-      lastStderrRef.current = stderr;
-
+      lastOutputRef.current = output || "";
+      lastStderrRef.current = stderr || "";
       setHistory((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           type: "code_run",
           input: "Run code",
-          stdout: output,
-          stderr: stderr,
+          stdout: output || "",
+          stderr: stderr || "",
           exitCode: exitCode ?? null,
           executionTime: executionTime ?? null,
           timestamp: Date.now(),
         },
       ]);
     }
-  }, [output, stderr, isRunning, exitCode, executionTime]);
+  }, [output, stderr, isRunning, exitCode, executionTime, historyArray]);
+
+  // Shared mode: observe the Y.Array for changes
+  useEffect(() => {
+    if (!historyArray) return;
+
+    const sync = () => {
+      const entries: HistoryEntry[] = [];
+      historyArray.forEach((item: Record<string, unknown>) => {
+        entries.push({
+          id: (item.id as string) || crypto.randomUUID(),
+          type: (item.type as "code_run" | "terminal") || "code_run",
+          input: (item.input as string) || "",
+          stdout: (item.stdout as string) || "",
+          stderr: (item.stderr as string) || "",
+          exitCode: (item.exitCode as number | null) ?? null,
+          executionTime: (item.executionTime as number | null) ?? null,
+          timestamp: (item.timestamp as number) || 0,
+          userName: (item.userName as string) || undefined,
+        });
+      });
+      setHistory(entries);
+    };
+
+    sync();
+    historyArray.observe(sync);
+    return () => historyArray.unobserve(sync);
+  }, [historyArray]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [history, isRunning]);
+  }, [history, isRunning, runningCmd]);
 
   const handleTerminalSubmit = useCallback(
     async (cmd: string) => {
@@ -83,13 +117,8 @@ export default function OutputConsole({
       setCmdHistory((prev) => [...prev, cmd]);
       setCmdHistoryIdx(-1);
       setTerminalInput("");
-
-      if (onTerminalCommand) {
-        onTerminalCommand(cmd);
-        return;
-      }
-
       setRunningCmd(true);
+
       const start = Date.now();
 
       try {
@@ -100,38 +129,46 @@ export default function OutputConsole({
         });
         const result = await res.json();
 
-        setHistory((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            type: "terminal",
-            input: cmd,
-            stdout: result.stdout || "",
-            stderr: result.stderr || result.error || "",
-            exitCode: result.code ?? -1,
-            executionTime: Date.now() - start,
-            timestamp: Date.now(),
-          },
-        ]);
+        const entry: Record<string, unknown> = {
+          id: crypto.randomUUID(),
+          type: "terminal",
+          input: cmd,
+          stdout: result.stdout || "",
+          stderr: result.stderr || result.error || "",
+          exitCode: result.code ?? -1,
+          executionTime: Date.now() - start,
+          timestamp: Date.now(),
+          userName,
+        };
+
+        if (historyArray && ydoc) {
+          ydoc.transact(() => historyArray.push([entry]));
+        } else {
+          setHistory((prev) => [...prev, entry as unknown as HistoryEntry]);
+        }
       } catch {
-        setHistory((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            type: "terminal",
-            input: cmd,
-            stdout: "",
-            stderr: "Command failed - check your connection",
-            exitCode: -1,
-            executionTime: Date.now() - start,
-            timestamp: Date.now(),
-          },
-        ]);
+        const entry: Record<string, unknown> = {
+          id: crypto.randomUUID(),
+          type: "terminal",
+          input: cmd,
+          stdout: "",
+          stderr: "Command failed - check your connection",
+          exitCode: -1,
+          executionTime: Date.now() - start,
+          timestamp: Date.now(),
+          userName,
+        };
+
+        if (historyArray && ydoc) {
+          ydoc.transact(() => historyArray.push([entry]));
+        } else {
+          setHistory((prev) => [...prev, entry as unknown as HistoryEntry]);
+        }
       } finally {
         setRunningCmd(false);
       }
     },
-    [onTerminalCommand, roomId],
+    [roomId, userName, historyArray, ydoc],
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -164,6 +201,9 @@ export default function OutputConsole({
   };
 
   const clearHistory = () => {
+    if (historyArray && ydoc) {
+      ydoc.transact(() => historyArray.delete(0, historyArray.length));
+    }
     setHistory([]);
     lastOutputRef.current = "";
     lastStderrRef.current = "";
@@ -216,7 +256,7 @@ export default function OutputConsole({
           <HistoryBlock key={entry.id} entry={entry} />
         ))}
 
-        {isRunning && (
+        {(isRunning || runningCmd) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -287,6 +327,11 @@ function HistoryBlock({ entry }: { entry: HistoryEntry }) {
         <span className="text-foreground/80">
           {isTerminal ? entry.input : "Run code"}
         </span>
+        {entry.userName && (
+          <span className="text-[10px] text-muted-foreground/50">
+            {entry.userName}
+          </span>
+        )}
         {entry.executionTime != null && (
           <span className="ml-auto text-[10px] text-muted-foreground/60">
             {entry.executionTime}ms
