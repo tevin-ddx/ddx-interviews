@@ -10,11 +10,11 @@ async function main() {
   });
   console.log(`Sandbox created: ${sandbox.sandboxId}`);
 
-  console.log("Installing pandas, numpy...");
+  console.log("Installing pandas, numpy, matplotlib...");
   const install1 = await sandbox.runCommand("pip", [
-    "install", "--quiet", "pandas", "numpy",
+    "install", "--quiet", "pandas", "numpy", "matplotlib",
   ]);
-  console.log("pip install pandas numpy exit:", install1.exitCode);
+  console.log("pip install pandas numpy matplotlib exit:", install1.exitCode);
   const err1 = await install1.stderr();
   if (err1) console.log(err1);
 
@@ -30,7 +30,7 @@ async function main() {
   console.log("Verifying installs...");
   const verify = await sandbox.runCommand("python3", [
     "-c",
-    "import pandas; import numpy; import torch; print(f'pandas={pandas.__version__} numpy={numpy.__version__} torch={torch.__version__}')",
+    "import pandas; import numpy; import torch; import matplotlib; print(f'pandas={pandas.__version__} numpy={numpy.__version__} torch={torch.__version__} matplotlib={matplotlib.__version__}')",
   ]);
   console.log(await verify.stdout());
 

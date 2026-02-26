@@ -92,6 +92,7 @@ export default function RoomPage({
   const [noteSaving, setNoteSaving] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
+  const [interviewEnded, setInterviewEnded] = useState(false);
 
   const codeGetterRef = useRef<(() => string) | null>(null);
   const eventBufferRef = useRef<EditorEvent[]>([]);
@@ -183,6 +184,12 @@ export default function RoomPage({
       setIsRunning(running === 1);
       if (running === 1) setRightPanel("output");
     });
+
+    const statusMap = doc.getMap<string>("interviewStatus");
+    if (statusMap.get("ended") === "true") setInterviewEnded(true);
+    statusMap.observe(() => {
+      if (statusMap.get("ended") === "true") setInterviewEnded(true);
+    });
   }, []);
 
   const handleEditorEvent = useCallback((event: EditorEvent) => {
@@ -258,6 +265,15 @@ export default function RoomPage({
 
   const endInterview = async () => {
     const finalCode = codeGetterRef.current ? codeGetterRef.current() : "";
+
+    // Broadcast end to all participants via Yjs
+    const doc = ydocRef.current;
+    if (doc) {
+      doc.transact(() => {
+        doc.getMap<string>("interviewStatus").set("ended", "true");
+      });
+    }
+
     // Flush remaining events
     const buf = eventBufferRef.current;
     eventBufferRef.current = [];
@@ -327,20 +343,27 @@ export default function RoomPage({
     );
   }
 
-  if (interview.status === "completed") {
+  if (interview.status === "completed" || interviewEnded) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-4">
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center space-y-4"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-lg font-bold text-white tracking-tight">
+            d/dx
+          </div>
           <h1 className="text-2xl font-bold">Interview Ended</h1>
           <p className="text-muted-foreground">
-            This interview session has been completed.
+            This interview session has been completed. Thank you for participating.
           </p>
           {userRole === "interviewer" && (
             <Button onClick={() => router.push(`/admin/interviews/${id}/review`)}>
               View Review
             </Button>
           )}
-        </div>
+        </motion.div>
       </div>
     );
   }

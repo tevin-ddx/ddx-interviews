@@ -211,7 +211,10 @@ async function executePersistent(
     }
 
     if (language === "python") {
-      const r = await sandbox.runCommand("python3", ["-c", code]);
+      await sandbox.writeFiles([
+        { path: "/tmp/main.py", content: Buffer.from(code) },
+      ]);
+      const r = await sandbox.runCommand("python3", ["/tmp/main.py"]);
       return extractResult(r, "sandbox-persistent");
     }
 
