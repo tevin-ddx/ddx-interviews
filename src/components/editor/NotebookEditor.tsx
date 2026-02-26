@@ -16,6 +16,47 @@ const CURSOR_COLORS = [
   "#8b5cf6", "#ef4444", "#22c55e", "#3b82f6",
 ];
 
+interface Peer {
+  name: string;
+  color: string;
+  clientId: number;
+}
+
+function injectCursorStyles() {
+  const STYLE_ID = "yjs-cursor-styles";
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = `
+    .yRemoteSelection {
+      background-color: var(--yjs-selection-color, rgba(99,102,241,0.25));
+    }
+    .yRemoteSelectionHead {
+      position: absolute;
+      border-left: 2px solid var(--yjs-cursor-color, #6366f1);
+      border-top: 2px solid var(--yjs-cursor-color, #6366f1);
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .yRemoteSelectionHead::after {
+      position: absolute;
+      content: attr(data-name);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      padding: 1px 4px 2px;
+      border-radius: 3px 3px 3px 0;
+      background-color: var(--yjs-cursor-color, #6366f1);
+      left: -2px;
+      top: -18px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 interface CellOutput {
   stdout: string;
   stderr: string;
@@ -55,7 +96,9 @@ export default function NotebookEditor({
   const [connected, setConnected] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [awareness, setAwareness] = useState<any>(null);
+  const [peers, setPeers] = useState<Peer[]>([]);
   const initializedRef = useRef(false);
+  const colorRef = useRef(CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)]);
 
   const syncCellViews = useCallback(() => {
     const arr = cellsArrayRef.current;
@@ -84,6 +127,10 @@ export default function NotebookEditor({
   }, []);
 
   useEffect(() => {
+    injectCursorStyles();
+  }, []);
+
+  useEffect(() => {
     if (!roomId) return;
     let destroyed = false;
 
@@ -106,13 +153,24 @@ export default function NotebookEditor({
         );
         providerRef.current = provider;
 
-        const color =
-          CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
         provider.awareness.setLocalStateField("user", {
           name: userName,
-          color,
+          color: colorRef.current,
         });
         if (!destroyed) setAwareness(provider.awareness);
+
+        provider.awareness.on("change", () => {
+          if (destroyed) return;
+          const states = provider.awareness.getStates();
+          const peerList: Peer[] = [];
+          states.forEach((state: Record<string, unknown>, clientId: number) => {
+            if (clientId !== doc.clientID && state.user) {
+              const user = state.user as { name: string; color: string };
+              peerList.push({ clientId, name: user.name, color: user.color });
+            }
+          });
+          setPeers(peerList);
+        });
 
         provider.on("sync", (synced: boolean) => {
           if (synced && !initializedRef.current) {
@@ -273,8 +331,25 @@ export default function NotebookEditor({
           className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-zinc-600"}`}
         />
         <span className="text-[10px] text-muted-foreground">
-          {connected ? "Notebook synced" : "Connecting..."}
+          {connected ? (peers.length > 0 ? "Live" : "Ready") : "Connecting..."}
         </span>
+        <div className="flex items-center gap-1 ml-auto">
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+            style={{ backgroundColor: colorRef.current }}
+          >
+            {userName} (you)
+          </span>
+          {peers.map((p) => (
+            <span
+              key={p.clientId}
+              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+              style={{ backgroundColor: p.color }}
+            >
+              {p.name}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -331,6 +406,9 @@ interface NotebookCellProps {
   onRemove: () => void;
 }
 
+const MIN_CELL_HEIGHT = 40;
+const MAX_CELL_HEIGHT = 600;
+
 function NotebookCell({
   cell,
   index,
@@ -341,11 +419,24 @@ function NotebookCell({
   onRemove,
 }: NotebookCellProps) {
   const bindingRef = useRef<{ destroy: () => void } | null>(null);
+  const editorInstanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const [editorHeight, setEditorHeight] = useState(MIN_CELL_HEIGHT);
+
+  const updateHeight = useCallback((ed: editor.IStandaloneCodeEditor) => {
+    const contentHeight = ed.getContentHeight();
+    const clamped = Math.max(MIN_CELL_HEIGHT, Math.min(contentHeight, MAX_CELL_HEIGHT));
+    setEditorHeight(clamped);
+    ed.layout();
+  }, []);
 
   const handleMount: OnMount = useCallback(
     async (editorInstance) => {
+      editorInstanceRef.current = editorInstance;
       const model = editorInstance.getModel();
       if (!model) return;
+
+      updateHeight(editorInstance);
+      editorInstance.onDidContentSizeChange(() => updateHeight(editorInstance));
 
       try {
         const { MonacoBinding } = await import("y-monaco");
@@ -357,11 +448,13 @@ function NotebookCell({
           awareness ?? undefined,
         );
         bindingRef.current = binding;
+
+        setTimeout(() => updateHeight(editorInstance), 100);
       } catch {
         // Fallback: no collaborative binding
       }
     },
-    [cell.yText, awareness],
+    [cell.yText, awareness, updateHeight],
   );
 
   useEffect(() => {
@@ -396,7 +489,7 @@ function NotebookCell({
         </div>
       </div>
 
-      <div className="h-32">
+      <div style={{ height: editorHeight }}>
         <Editor
           height="100%"
           language={language}
@@ -408,6 +501,7 @@ function NotebookCell({
             lineHeight: 20,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
+            scrollbar: { vertical: "hidden", horizontal: "auto" },
             padding: { top: 8, bottom: 8 },
             renderLineHighlight: "line",
             cursorBlinking: "smooth",
@@ -423,7 +517,7 @@ function NotebookCell({
       </div>
 
       {hasOutput && (
-        <div className="h-24 border-t border-border">
+        <div className="max-h-48 border-t border-border">
           <OutputConsole
             output={cell.output.stdout}
             stderr={cell.output.stderr}
