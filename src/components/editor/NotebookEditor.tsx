@@ -30,16 +30,22 @@ interface CellView {
   output: CellOutput;
 }
 
+interface StarterCell {
+  source: string;
+}
+
 interface NotebookEditorProps {
   roomId?: string;
   userName?: string;
   language?: string;
+  initialCells?: StarterCell[];
 }
 
 export default function NotebookEditor({
   roomId,
   userName = "Anonymous",
   language = "python",
+  initialCells,
 }: NotebookEditorProps) {
   const docRef = useRef<Y.Doc | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,7 +121,15 @@ export default function NotebookEditor({
             if (cellsArray.length === 0) {
               const jitter = 200 + Math.random() * 500;
               setTimeout(() => {
-                if (cellsArray.length === 0) addCellToDoc(doc, cellsArray);
+                if (cellsArray.length === 0) {
+                  if (initialCells && initialCells.length > 0) {
+                    for (const c of initialCells) {
+                      addCellToDoc(doc, cellsArray, c.source);
+                    }
+                  } else {
+                    addCellToDoc(doc, cellsArray);
+                  }
+                }
               }, jitter);
             }
             syncCellViews();
@@ -128,7 +142,13 @@ export default function NotebookEditor({
       } catch {
         initializedRef.current = true;
         if (!destroyed) setConnected(true);
-        if (cellsArray.length === 0) addCellToDoc(doc, cellsArray);
+        if (cellsArray.length === 0) {
+          if (initialCells && initialCells.length > 0) {
+            for (const c of initialCells) addCellToDoc(doc, cellsArray, c.source);
+          } else {
+            addCellToDoc(doc, cellsArray);
+          }
+        }
         syncCellViews();
       }
 
@@ -140,7 +160,13 @@ export default function NotebookEditor({
         if (!initializedRef.current) {
           initializedRef.current = true;
           if (!destroyed) setConnected(true);
-          if (cellsArray.length === 0) addCellToDoc(doc, cellsArray);
+          if (cellsArray.length === 0) {
+            if (initialCells && initialCells.length > 0) {
+              for (const c of initialCells) addCellToDoc(doc, cellsArray, c.source);
+            } else {
+              addCellToDoc(doc, cellsArray);
+            }
+          }
           syncCellViews();
         }
       }, 4000);
@@ -276,11 +302,13 @@ export default function NotebookEditor({
   );
 }
 
-function addCellToDoc(doc: Y.Doc, arr: Y.Array<Y.Map<unknown>>) {
+function addCellToDoc(doc: Y.Doc, arr: Y.Array<Y.Map<unknown>>, source = "") {
   doc.transact(() => {
     const cellMap = new Y.Map<unknown>();
     cellMap.set("id", crypto.randomUUID());
-    cellMap.set("code", new Y.Text());
+    const code = new Y.Text();
+    if (source) code.insert(0, source);
+    cellMap.set("code", code);
     const outputMap = new Y.Map<unknown>();
     outputMap.set("stdout", "");
     outputMap.set("stderr", "");

@@ -392,6 +392,18 @@ export default function RoomPage({
     interview.question?.boilerplateCode ||
     "# Write your code here\n";
 
+  let notebookInitialCells: { source: string }[] | undefined;
+  if (mode === "notebook" && interview.question?.boilerplateCode) {
+    try {
+      const parsed = JSON.parse(interview.question.boilerplateCode);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        notebookInitialCells = parsed;
+      }
+    } catch {
+      // not JSON — ignore
+    }
+  }
+
   const hasSolution = !!interview.question?.solutionCode;
 
   return (
@@ -635,6 +647,7 @@ export default function RoomPage({
               roomId={id}
               userName={userName}
               language={language === "cpp" ? "cpp" : "python"}
+              initialCells={notebookInitialCells}
             />
           </Panel>
         )}

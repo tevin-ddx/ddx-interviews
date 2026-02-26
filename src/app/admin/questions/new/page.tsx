@@ -13,6 +13,11 @@ interface UploadedFile {
   mimeType: string;
 }
 
+interface NotebookCell {
+  source: string;
+  cell_type: string;
+}
+
 const QUESTION_TYPES = [
   { value: "python_script", label: "Python Script" },
   { value: "python_notebook", label: "Python Notebook" },
@@ -29,12 +34,26 @@ function typeToLanguage(type: string): string {
   return type === "cpp" ? "cpp" : "python";
 }
 
+function parseIpynb(text: string): NotebookCell[] {
+  const nb = JSON.parse(text);
+  const cells: NotebookCell[] = [];
+  for (const c of nb.cells || []) {
+    if (c.cell_type !== "code") continue;
+    const source = Array.isArray(c.source) ? c.source.join("") : c.source || "";
+    if (source.trim()) cells.push({ source, cell_type: "code" });
+  }
+  return cells;
+}
+
 export default function NewQuestionPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const notebookInputRef = useRef<HTMLInputElement>(null);
+  const [notebookCells, setNotebookCells] = useState<NotebookCell[]>([]);
+  const [notebookFileName, setNotebookFileName] = useState<string>("");
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -83,11 +102,37 @@ export default function NewQuestionPage() {
           ? BOILERPLATES[type] || ""
           : f.boilerplateCode,
     }));
+    if (type !== "python_notebook") {
+      setNotebookCells([]);
+      setNotebookFileName("");
+    }
+  };
+
+  const handleNotebookUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const cells = parseIpynb(reader.result as string);
+        setNotebookCells(cells);
+        setNotebookFileName(file.name);
+      } catch {
+        alert("Failed to parse notebook file");
+      }
+    };
+    reader.readAsText(file);
+    if (notebookInputRef.current) notebookInputRef.current.value = "";
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
+
+    const boilerplate =
+      form.type === "python_notebook" && notebookCells.length > 0
+        ? JSON.stringify(notebookCells)
+        : form.boilerplateCode;
 
     try {
       const res = await fetch("/api/questions", {
@@ -95,6 +140,7 @@ export default function NewQuestionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          boilerplateCode: boilerplate,
           language: typeToLanguage(form.type),
           files: uploadedFiles,
         }),
@@ -190,7 +236,60 @@ export default function NewQuestionPage() {
           />
         </div>
 
-        {form.type !== "python_notebook" && (
+        {form.type === "python_notebook" ? (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-foreground/80">
+              Starter Notebook
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Upload a .ipynb file to pre-populate the notebook cells
+            </p>
+
+            {notebookCells.length > 0 && (
+              <div className="space-y-1.5 rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{notebookFileName}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setNotebookCells([]); setNotebookFileName(""); }}
+                    className="text-xs text-muted-foreground hover:text-red-400 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {notebookCells.length} code cell{notebookCells.length !== 1 ? "s" : ""} found
+                </p>
+                {notebookCells.map((cell, i) => (
+                  <pre
+                    key={i}
+                    className="rounded-md bg-secondary/50 px-3 py-2 font-mono text-xs text-foreground/80 overflow-x-auto max-h-24 overflow-y-auto"
+                  >
+                    {cell.source.length > 200 ? cell.source.slice(0, 200) + "..." : cell.source}
+                  </pre>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={notebookInputRef}
+                type="file"
+                accept=".ipynb"
+                onChange={handleNotebookUpload}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => notebookInputRef.current?.click()}
+              >
+                {notebookCells.length > 0 ? "Replace Notebook" : "Upload .ipynb"}
+              </Button>
+            </div>
+          </div>
+        ) : (
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground/80">
               Boilerplate Code
