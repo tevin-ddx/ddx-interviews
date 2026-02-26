@@ -25,7 +25,7 @@ See `package.json`. Key commands: `npm run dev`, `npm run dev:ws`, `npm run buil
 
 ### Authentication
 
-Admin login: `admin@codestream.dev` / `admin123`. JWT sessions in HTTP-only cookies (`jose`).
+Admin login via `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables. JWT sessions in HTTP-only cookies (`jose`).
 
 ### Code execution
 

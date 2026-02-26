@@ -67,7 +67,7 @@ export default function LoginPage() {
             id="email"
             label="Email"
             type="email"
-            placeholder="admin@ddx.dev"
+            placeholder="interviews@ddx.inc"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -98,7 +98,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-muted-foreground">
-          Demo: admin@codestream.dev / admin123 
+          Admin access only
         </p>
       </motion.div>
     </div>
