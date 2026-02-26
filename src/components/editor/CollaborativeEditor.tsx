@@ -10,6 +10,9 @@ const CURSOR_COLORS = [
   "#8b5cf6", "#ef4444", "#22c55e", "#3b82f6",
 ];
 
+const PARTYKIT_HOST =
+  process.env.NEXT_PUBLIC_PARTYKIT_HOST || "codestream-collab.tevin-ddx.partykit.dev";
+
 interface Peer {
   name: string;
   color: string;
@@ -31,91 +34,42 @@ interface CollaborativeEditorProps {
   readOnly?: boolean;
   onCodeRef?: (getter: () => string) => void;
   onEvent?: (event: EditorEvent) => void;
+  onDocReady?: (doc: Y.Doc) => void;
 }
 
-const MSG_SYNC_STEP1 = 0;
-const MSG_SYNC_STEP2 = 1;
-const MSG_SYNC_UPDATE = 2;
-const MSG_AWARENESS = 3;
-
-function encodeAwareness(clientId: number, state: object): Uint8Array {
-  const stateStr = JSON.stringify(state);
-  const stateBytes = new TextEncoder().encode(stateStr);
-  const buf: number[] = [];
-
-  buf.push(1);
-
-  let id = clientId;
-  while (id > 0x7f) {
-    buf.push(0x80 | (id & 0x7f));
-    id >>>= 7;
-  }
-  buf.push(id & 0x7f);
-
-  let c = Date.now() & 0xffffffff;
-  while (c > 0x7f) {
-    buf.push(0x80 | (c & 0x7f));
-    c >>>= 7;
-  }
-  buf.push(c & 0x7f);
-
-  let len = stateBytes.length;
-  while (len > 0x7f) {
-    buf.push(0x80 | (len & 0x7f));
-    len >>>= 7;
-  }
-  buf.push(len & 0x7f);
-  for (let i = 0; i < stateBytes.length; i++) buf.push(stateBytes[i]);
-
-  return new Uint8Array(buf);
-}
-
-function decodeAwareness(data: Uint8Array): Array<{ clientId: number; state: Record<string, unknown> }> {
-  const results: Array<{ clientId: number; state: Record<string, unknown> }> = [];
-  try {
-    let offset = 0;
-    let count = 0;
-    let shift = 0;
-    let b;
-    do {
-      b = data[offset++];
-      count |= (b & 0x7f) << shift;
-      shift += 7;
-    } while (b >= 0x80);
-
-    for (let i = 0; i < count; i++) {
-      let clientId = 0;
-      shift = 0;
-      do {
-        b = data[offset++];
-        clientId |= (b & 0x7f) << shift;
-        shift += 7;
-      } while (b >= 0x80);
-
-      shift = 0;
-      do {
-        b = data[offset++];
-        shift += 7;
-      } while (b >= 0x80);
-
-      let sLen = 0;
-      shift = 0;
-      do {
-        b = data[offset++];
-        sLen |= (b & 0x7f) << shift;
-        shift += 7;
-      } while (b >= 0x80);
-
-      const stateBytes = data.slice(offset, offset + sLen);
-      offset += sLen;
-      const stateStr = new TextDecoder().decode(stateBytes);
-      const state = JSON.parse(stateStr);
-      results.push({ clientId, state });
+function injectCursorStyles() {
+  const STYLE_ID = "yjs-cursor-styles";
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = `
+    .yRemoteSelection {
+      background-color: var(--yjs-selection-color, rgba(99,102,241,0.25));
     }
-  } catch {
-    /* ignore malformed awareness */
-  }
-  return results;
+    .yRemoteSelectionHead {
+      position: absolute;
+      border-left: 2px solid var(--yjs-cursor-color, #6366f1);
+      border-top: 2px solid var(--yjs-cursor-color, #6366f1);
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .yRemoteSelectionHead::after {
+      position: absolute;
+      content: attr(data-name);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      padding: 1px 4px 2px;
+      border-radius: 3px 3px 3px 0;
+      background-color: var(--yjs-cursor-color, #6366f1);
+      left: -2px;
+      top: -18px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 export default function CollaborativeEditor({
@@ -126,26 +80,26 @@ export default function CollaborativeEditor({
   readOnly = false,
   onCodeRef,
   onEvent,
+  onDocReady,
 }: CollaborativeEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const providerRef = useRef<any>(null);
   const bindingRef = useRef<{ destroy: () => void } | null>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [connected, setConnected] = useState(false);
   const initializedRef = useRef(false);
   const colorRef = useRef(CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)]);
-  const codeGetterRef = useRef<() => string>(() => "");
 
   useEffect(() => {
-    if (onCodeRef) {
-      onCodeRef(() => {
-        const doc = docRef.current;
-        if (doc) return doc.getText("monaco").toString();
-        return "";
-      });
-    }
-  }, [onCodeRef]);
+    injectCursorStyles();
+    return () => {
+      bindingRef.current?.destroy();
+      providerRef.current?.destroy();
+      docRef.current?.destroy();
+    };
+  }, []);
 
   const setupCollaboration = useCallback(
     async (editorInstance: editor.IStandaloneCodeEditor) => {
@@ -153,97 +107,21 @@ export default function CollaborativeEditor({
       docRef.current = doc;
       const yText = doc.getText("monaco");
 
-      codeGetterRef.current = () => yText.toString();
-      if (onCodeRef) onCodeRef(codeGetterRef.current);
+      if (onCodeRef) onCodeRef(() => yText.toString());
+      if (onDocReady) onDocReady(doc);
 
-      const wsUrl =
-        (typeof window !== "undefined" && window.location.protocol === "https:" ? "wss" : "ws") +
-        `://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:1234/${roomId}`;
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.binaryType = "arraybuffer";
-
-      ws.onopen = () => {
-        setConnected(true);
-
-        const sv = Y.encodeStateVector(doc);
-        const msg = new Uint8Array(1 + sv.length);
-        msg[0] = MSG_SYNC_STEP1;
-        msg.set(sv, 1);
-        ws.send(msg);
-
-        const awarenessData = encodeAwareness(doc.clientID, {
-          user: { name: userName, color: colorRef.current },
-        });
-        const awarenessMsg = new Uint8Array(1 + awarenessData.length);
-        awarenessMsg[0] = MSG_AWARENESS;
-        awarenessMsg.set(awarenessData, 1);
-        ws.send(awarenessMsg);
-      };
-
-      ws.onmessage = (event) => {
-        const data = new Uint8Array(event.data);
-        const msgType = data[0];
-        const payload = data.slice(1);
-
-        switch (msgType) {
-          case MSG_SYNC_STEP1: {
-            const update = Y.encodeStateAsUpdate(doc, payload);
-            const resp = new Uint8Array(1 + update.length);
-            resp[0] = MSG_SYNC_STEP2;
-            resp.set(update, 1);
-            ws.send(resp);
-            break;
-          }
-          case MSG_SYNC_STEP2: {
-            Y.applyUpdate(doc, payload);
-
-            if (!initializedRef.current && yText.length === 0 && initialContent) {
-              doc.transact(() => {
-                yText.insert(0, initialContent);
-              });
-            }
-            initializedRef.current = true;
-            break;
-          }
-          case MSG_SYNC_UPDATE: {
-            Y.applyUpdate(doc, payload);
-            break;
-          }
-          case MSG_AWARENESS: {
-            const updates = decodeAwareness(payload);
-            setPeers((prev) => {
-              const map = new Map(prev.map((p) => [p.clientId, p]));
-              for (const u of updates) {
-                if (u.state && typeof u.state === "object" && "user" in u.state) {
-                  const user = u.state.user as { name: string; color: string };
-                  map.set(u.clientId, {
-                    clientId: u.clientId,
-                    name: user.name,
-                    color: user.color,
-                  });
-                }
-              }
-              map.delete(doc.clientID);
-              return Array.from(map.values());
-            });
-            break;
-          }
+      const tryInitializeContent = () => {
+        if (initializedRef.current) return;
+        if (yText.length === 0 && initialContent) {
+          doc.transact(() => {
+            yText.insert(0, initialContent);
+          });
         }
+        initializedRef.current = true;
       };
 
-      ws.onclose = () => setConnected(false);
-
-      doc.on("update", (update: Uint8Array, origin: unknown) => {
+      doc.on("update", (_update: Uint8Array, origin: unknown) => {
         if (origin === "remote") return;
-        if (ws.readyState === WebSocket.OPEN) {
-          const msg = new Uint8Array(1 + update.length);
-          msg[0] = MSG_SYNC_UPDATE;
-          msg.set(update, 1);
-          ws.send(msg);
-        }
         if (onEvent) {
           onEvent({
             timestamp: Date.now(),
@@ -254,27 +132,85 @@ export default function CollaborativeEditor({
         }
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let awareness: any = undefined;
+
+      try {
+        const { default: YPartyKitProvider } = await import(
+          "y-partykit/provider"
+        );
+
+        const provider = new YPartyKitProvider(PARTYKIT_HOST, roomId, doc, {
+          connect: true,
+        });
+
+        providerRef.current = provider;
+        awareness = provider.awareness;
+
+        provider.awareness.setLocalStateField("user", {
+          name: userName,
+          color: colorRef.current,
+        });
+
+        provider.on("sync", (synced: boolean) => {
+          if (synced) {
+            setConnected(true);
+            // Random delay (200-700ms) prevents both users from inserting
+            // boilerplate simultaneously — the first inserter wins and
+            // the second will see non-empty content via server sync.
+            const jitter = 200 + Math.random() * 500;
+            setTimeout(tryInitializeContent, jitter);
+          }
+        });
+
+        provider.on("status", ({ status }: { status: string }) => {
+          setConnected(status === "connected");
+        });
+
+        provider.awareness.on("change", () => {
+          const states = provider.awareness.getStates();
+          const peerList: Peer[] = [];
+          states.forEach(
+            (state: Record<string, unknown>, clientId: number) => {
+              if (clientId !== doc.clientID && state.user) {
+                const user = state.user as { name: string; color: string };
+                peerList.push({
+                  clientId,
+                  name: user.name,
+                  color: user.color,
+                });
+              }
+            },
+          );
+          setPeers(peerList);
+        });
+      } catch {
+        tryInitializeContent();
+        setConnected(true);
+      }
+
+      // Hard fallback: if sync never fires (network issues), init after 4s
+      setTimeout(() => {
+        if (!initializedRef.current) {
+          tryInitializeContent();
+          setConnected(true);
+        }
+      }, 4000);
+
       const model = editorInstance.getModel();
       if (model) {
         const { MonacoBinding } = await import("y-monaco");
         const binding = new MonacoBinding(
           yText,
           model,
-          new Set([editorInstance])
+          new Set([editorInstance]),
+          awareness,
         );
         bindingRef.current = binding;
       }
     },
-    [roomId, userName, initialContent, onCodeRef, onEvent]
+    [roomId, userName, initialContent, onCodeRef, onEvent, onDocReady],
   );
-
-  useEffect(() => {
-    return () => {
-      bindingRef.current?.destroy();
-      wsRef.current?.close();
-      docRef.current?.destroy();
-    };
-  }, []);
 
   const handleMount: OnMount = useCallback(
     (editorInstance) => {
@@ -282,28 +218,25 @@ export default function CollaborativeEditor({
       editorInstance.focus();
       setupCollaboration(editorInstance);
     },
-    [setupCollaboration]
+    [setupCollaboration],
   );
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-border">
-      {/* Presence bar */}
       <div className="flex items-center gap-2 border-b border-border bg-background px-3 py-1.5">
         <div
           className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-zinc-600"}`}
         />
         <span className="text-[10px] text-muted-foreground">
-          {connected ? "Live" : "Connecting..."}
+          {connected ? (peers.length > 0 ? "Live" : "Ready") : "Connecting..."}
         </span>
         <div className="flex items-center gap-1 ml-auto">
-          {/* Current user */}
           <span
             className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
             style={{ backgroundColor: colorRef.current }}
           >
             {userName} (you)
           </span>
-          {/* Remote peers */}
           {peers.map((p) => (
             <span
               key={p.clientId}

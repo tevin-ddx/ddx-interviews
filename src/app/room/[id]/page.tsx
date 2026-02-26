@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import * as Y from "yjs";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import ThemeToggle from "@/components/ui/ThemeToggle";
@@ -98,6 +99,8 @@ export default function RoomPage({
   const codeGetterRef = useRef<(() => string) | null>(null);
   const eventBufferRef = useRef<EditorEvent[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const outputMapRef = useRef<Y.Map<string | number | null> | null>(null);
 
   useEffect(() => {
     fetch(`/api/interviews/${id}`)
@@ -156,6 +159,27 @@ export default function RoomPage({
     codeGetterRef.current = getter;
   }, []);
 
+  const handleDocReady = useCallback((doc: Y.Doc) => {
+    ydocRef.current = doc;
+    const outputMap = doc.getMap<string | number | null>("executionOutput");
+    outputMapRef.current = outputMap;
+
+    outputMap.observe(() => {
+      const stdout = (outputMap.get("stdout") as string) ?? "";
+      const stderr = (outputMap.get("stderr") as string) ?? "";
+      const code = outputMap.get("exitCode") as number | null;
+      const time = outputMap.get("executionTime") as number | null;
+      const running = outputMap.get("isRunning") as number;
+
+      setOutput(stdout);
+      setStderr(stderr);
+      setExitCode(code);
+      setExecutionTime(time);
+      setIsRunning(running === 1);
+      if (running === 1) setRightPanel("output");
+    });
+  }, []);
+
   const handleEditorEvent = useCallback((event: EditorEvent) => {
     eventBufferRef.current.push(event);
   }, []);
@@ -164,11 +188,30 @@ export default function RoomPage({
     const code = codeGetterRef.current ? codeGetterRef.current() : "";
     if (!code.trim()) return;
 
+    const map = outputMapRef.current;
+    const updateOutput = (vals: Record<string, string | number | null>) => {
+      if (map) {
+        ydocRef.current?.transact(() => {
+          for (const [k, v] of Object.entries(vals)) map.set(k, v);
+        });
+      } else {
+        if (vals.stdout !== undefined) setOutput(vals.stdout as string);
+        if (vals.stderr !== undefined) setStderr(vals.stderr as string);
+        if (vals.exitCode !== undefined) setExitCode(vals.exitCode as number | null);
+        if (vals.executionTime !== undefined) setExecutionTime(vals.executionTime as number | null);
+        if (vals.isRunning !== undefined) setIsRunning(vals.isRunning === 1);
+      }
+    };
+
     setRightPanel("output");
-    setIsRunning(true);
-    setOutput("");
-    setStderr("");
-    setExitCode(null);
+    updateOutput({
+      isRunning: 1,
+      stdout: "",
+      stderr: "",
+      exitCode: null,
+      executionTime: null,
+    });
+
     const start = Date.now();
 
     try {
@@ -178,16 +221,20 @@ export default function RoomPage({
         body: JSON.stringify({ code, language }),
       });
       const result = await res.json();
-      setExecutionTime(Date.now() - start);
-      setOutput(result.stdout || "");
-      setStderr(result.stderr || result.error || "");
-      setExitCode(result.code ?? -1);
+      updateOutput({
+        isRunning: 0,
+        stdout: result.stdout || "",
+        stderr: result.stderr || result.error || "",
+        exitCode: result.code ?? -1,
+        executionTime: Date.now() - start,
+      });
     } catch {
-      setExecutionTime(Date.now() - start);
-      setStderr("Execution failed - check your connection");
-      setExitCode(-1);
-    } finally {
-      setIsRunning(false);
+      updateOutput({
+        isRunning: 0,
+        stderr: "Execution failed - check your connection",
+        exitCode: -1,
+        executionTime: Date.now() - start,
+      });
     }
   }, [language]);
 
@@ -486,6 +533,7 @@ export default function RoomPage({
                   language={language === "cpp" ? "cpp" : "python"}
                   onCodeRef={handleCodeRef}
                   onEvent={handleEditorEvent}
+                  onDocReady={handleDocReady}
                 />
               </div>
               <div className="w-[400px] shrink-0 border-l border-border flex flex-col">
@@ -602,7 +650,11 @@ export default function RoomPage({
             </>
           ) : (
             <div className="flex-1 overflow-hidden">
-              <NotebookEditor />
+              <NotebookEditor
+                roomId={id}
+                userName={userName}
+                language={language === "cpp" ? "cpp" : "python"}
+              />
             </div>
           )}
         </div>
