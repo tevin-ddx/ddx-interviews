@@ -97,7 +97,8 @@ export default function RoomPage({
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
   const outputMapRef = useRef<Y.Map<string | number | null> | null>(null);
-  const historyArrayRef = useRef<Y.Array<Record<string, unknown>> | null>(null);
+  const [sharedHistory, setSharedHistory] = useState<Y.Array<Record<string, unknown>> | null>(null);
+  const [sharedDoc, setSharedDoc] = useState<Y.Doc | null>(null);
 
   useEffect(() => {
     fetch(`/api/interviews/${id}`)
@@ -168,11 +169,13 @@ export default function RoomPage({
 
   const handleDocReady = useCallback((doc: Y.Doc) => {
     ydocRef.current = doc;
+    setSharedDoc(doc);
+
     const outputMap = doc.getMap<string | number | null>("executionOutput");
     outputMapRef.current = outputMap;
 
     const historyArray = doc.getArray<Record<string, unknown>>("terminalHistory");
-    historyArrayRef.current = historyArray;
+    setSharedHistory(historyArray);
 
     outputMap.observe(() => {
       const running = outputMap.get("isRunning") as number;
@@ -224,9 +227,9 @@ export default function RoomPage({
         userName,
       };
 
-      if (historyArrayRef.current) {
+      if (sharedHistory) {
         ydocRef.current?.transact(() => {
-          historyArrayRef.current!.push([entry]);
+          sharedHistory.push([entry]);
         });
       }
     } catch {
@@ -244,13 +247,13 @@ export default function RoomPage({
         userName,
       };
 
-      if (historyArrayRef.current) {
+      if (sharedHistory) {
         ydocRef.current?.transact(() => {
-          historyArrayRef.current!.push([entry]);
+          sharedHistory.push([entry]);
         });
       }
     }
-  }, [language, userName]);
+  }, [language, userName, sharedHistory]);
 
   const endInterview = async () => {
     const finalCode = codeGetterRef.current ? codeGetterRef.current() : "";
@@ -557,8 +560,8 @@ export default function RoomPage({
                     <OutputConsole
                       isRunning={isRunning}
                       roomId={id}
-                      historyArray={historyArrayRef.current}
-                      ydoc={ydocRef.current}
+                      historyArray={sharedHistory}
+                      ydoc={sharedDoc}
                       userName={userName}
                     />
                   )}
