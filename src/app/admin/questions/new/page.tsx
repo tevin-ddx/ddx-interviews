@@ -13,6 +13,22 @@ interface UploadedFile {
   mimeType: string;
 }
 
+const QUESTION_TYPES = [
+  { value: "python_script", label: "Python Script" },
+  { value: "python_notebook", label: "Python Notebook" },
+  { value: "cpp", label: "C++" },
+];
+
+const BOILERPLATES: Record<string, string> = {
+  python_script: "# Write your solution here\n",
+  python_notebook: "",
+  cpp: '#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}\n',
+};
+
+function typeToLanguage(type: string): string {
+  return type === "cpp" ? "cpp" : "python";
+}
+
 export default function NewQuestionPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -26,7 +42,7 @@ export default function NewQuestionPage() {
     solutionCode: "",
     difficulty: "medium",
     category: "",
-    language: "python",
+    type: "python_script",
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,6 +74,17 @@ export default function NewQuestionPage() {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const handleTypeChange = (type: string) => {
+    setForm((f) => ({
+      ...f,
+      type,
+      boilerplateCode:
+        f.boilerplateCode === BOILERPLATES[f.type]
+          ? BOILERPLATES[type] || ""
+          : f.boilerplateCode,
+    }));
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -66,7 +93,11 @@ export default function NewQuestionPage() {
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, files: uploadedFiles }),
+        body: JSON.stringify({
+          ...form,
+          language: typeToLanguage(form.type),
+          files: uploadedFiles,
+        }),
       });
 
       if (res.ok) {
@@ -75,22 +106,6 @@ export default function NewQuestionPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const boilerplates: Record<string, string> = {
-    python: "# Write your solution here\n",
-    cpp: '#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}\n',
-  };
-
-  const handleLanguageChange = (lang: string) => {
-    setForm((f) => ({
-      ...f,
-      language: lang,
-      boilerplateCode:
-        f.boilerplateCode === boilerplates[f.language]
-          ? boilerplates[lang] || ""
-          : f.boilerplateCode,
-    }));
   };
 
   return (
@@ -134,15 +149,18 @@ export default function NewQuestionPage() {
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground/80">
-              Language
+              Type
             </label>
             <select
-              value={form.language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
+              value={form.type}
+              onChange={(e) => handleTypeChange(e.target.value)}
               className="flex h-9 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="python">Python</option>
-              <option value="cpp">C++</option>
+              {QUESTION_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="space-y-1.5">
@@ -172,23 +190,28 @@ export default function NewQuestionPage() {
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-foreground/80">
-            Boilerplate Code
-          </label>
-          <textarea
-            value={form.boilerplateCode}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
-            }
-            rows={6}
-            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
+        {form.type !== "python_notebook" && (
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground/80">
+              Boilerplate Code
+            </label>
+            <textarea
+              value={form.boilerplateCode}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
+              }
+              rows={6}
+              className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-foreground/80">
-            Solution Code <span className="text-muted-foreground font-normal">(interviewer-only, hidden from candidates)</span>
+            Solution Code{" "}
+            <span className="text-muted-foreground font-normal">
+              (interviewer-only, hidden from candidates)
+            </span>
           </label>
           <textarea
             value={form.solutionCode}
@@ -218,7 +241,9 @@ export default function NewQuestionPage() {
                   className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-indigo-600 dark:text-indigo-400">📎</span>
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400">
+                      📎
+                    </span>
                     <span className="text-sm">{file.name}</span>
                     <span className="text-xs text-muted-foreground">
                       ({(file.size / 1024).toFixed(1)} KB)
@@ -260,11 +285,7 @@ export default function NewQuestionPage() {
           <Button type="submit" disabled={saving}>
             {saving ? "Creating..." : "Create Question"}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => router.back()}
-          >
+          <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
           </Button>
         </div>

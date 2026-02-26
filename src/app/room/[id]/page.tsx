@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import * as Y from "yjs";
 import Button from "@/components/ui/Button";
-import Badge from "@/components/ui/Badge";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import OutputConsole from "@/components/editor/OutputConsole";
 
@@ -56,6 +55,7 @@ interface Interview {
     solutionCode: string;
     difficulty: string;
     language: string;
+    type: string;
     files: QuestionFile[];
   } | null;
 }
@@ -110,7 +110,17 @@ export default function RoomPage({
       })
       .then((data: Interview) => {
         setInterview(data);
-        setLanguage(data.question?.language || data.language || "python");
+        const qType = data.question?.type || "python_script";
+        if (qType === "python_notebook") {
+          setMode("notebook");
+          setLanguage("python");
+        } else if (qType === "cpp") {
+          setMode("script");
+          setLanguage("cpp");
+        } else {
+          setMode("script");
+          setLanguage(data.question?.language || data.language || "python");
+        }
       })
       .catch(() => setNotFound(true));
   }, [id]);
@@ -385,50 +395,13 @@ export default function RoomPage({
             CS
           </div>
           <span className="text-sm font-medium">{interview.title}</span>
-          {interview.question && (
-            <Badge
-              variant={
-                interview.question.difficulty as "easy" | "medium" | "hard"
-              }
-            >
-              {interview.question.difficulty}
-            </Badge>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="h-7 rounded-md border border-border bg-card px-2 text-xs text-foreground/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <option value="python">Python</option>
-            <option value="cpp">C++</option>
-          </select>
-
-          <div className="flex rounded-lg border border-border text-xs">
-            <button
-              onClick={() => setMode("script")}
-              className={`px-3 py-1.5 transition-colors cursor-pointer ${
-                mode === "script"
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              } rounded-l-lg`}
-            >
-              Script
-            </button>
-            <button
-              onClick={() => setMode("notebook")}
-              className={`px-3 py-1.5 transition-colors cursor-pointer ${
-                mode === "notebook"
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              } rounded-r-lg`}
-            >
-              Notebook
-            </button>
-          </div>
+          <span className="text-[10px] rounded-md border border-border bg-secondary/50 px-2 py-1 text-muted-foreground">
+            {mode === "notebook" ? "Notebook" : language === "cpp" ? "C++" : "Python"}
+          </span>
 
           <Button
             onClick={runCode}

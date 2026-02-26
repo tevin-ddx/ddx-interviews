@@ -14,9 +14,16 @@ interface Question {
   difficulty: string;
   category: string;
   language: string;
+  type: string;
   createdAt: string;
   files: { id: string; name: string }[];
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  python_script: "Python Script",
+  python_notebook: "Python Notebook",
+  cpp: "C++",
+};
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -88,7 +95,7 @@ export default function QuestionsPage() {
                       >
                         {q.difficulty}
                       </Badge>
-                      <Badge>{q.language === "cpp" ? "C++" : "Python"}</Badge>
+                      <Badge>{TYPE_LABELS[q.type] || (q.language === "cpp" ? "C++" : "Python Script")}</Badge>
                       {q.category && (
                         <Badge>{q.category}</Badge>
                       )}

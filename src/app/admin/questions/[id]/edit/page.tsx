@@ -6,6 +6,16 @@ import { motion } from "framer-motion";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
+const QUESTION_TYPES = [
+  { value: "python_script", label: "Python Script" },
+  { value: "python_notebook", label: "Python Notebook" },
+  { value: "cpp", label: "C++" },
+];
+
+function typeToLanguage(type: string): string {
+  return type === "cpp" ? "cpp" : "python";
+}
+
 export default function EditQuestionPage({
   params,
 }: {
@@ -19,8 +29,10 @@ export default function EditQuestionPage({
     title: "",
     description: "",
     boilerplateCode: "",
+    solutionCode: "",
     difficulty: "medium",
     category: "",
+    type: "python_script",
   });
 
   useEffect(() => {
@@ -31,8 +43,10 @@ export default function EditQuestionPage({
           title: data.title,
           description: data.description,
           boilerplateCode: data.boilerplateCode,
+          solutionCode: data.solutionCode || "",
           difficulty: data.difficulty,
           category: data.category,
+          type: data.type || "python_script",
         });
         setLoading(false);
       });
@@ -46,7 +60,10 @@ export default function EditQuestionPage({
       const res = await fetch(`/api/questions/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          language: typeToLanguage(form.type),
+        }),
       });
 
       if (res.ok) {
@@ -98,21 +115,25 @@ export default function EditQuestionPage({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-foreground/80">
-            Boilerplate Code
-          </label>
-          <textarea
-            value={form.boilerplateCode}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
-            }
-            rows={6}
-            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground/80">
+              Type
+            </label>
+            <select
+              value={form.type}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, type: e.target.value }))
+              }
+              className="flex h-9 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {QUESTION_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground/80">
               Difficulty
@@ -139,15 +160,45 @@ export default function EditQuestionPage({
           />
         </div>
 
+        {form.type !== "python_notebook" && (
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground/80">
+              Boilerplate Code
+            </label>
+            <textarea
+              value={form.boilerplateCode}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, boilerplateCode: e.target.value }))
+              }
+              rows={6}
+              className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-foreground/80">
+            Solution Code{" "}
+            <span className="text-muted-foreground font-normal">
+              (interviewer-only, hidden from candidates)
+            </span>
+          </label>
+          <textarea
+            value={form.solutionCode}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, solutionCode: e.target.value }))
+            }
+            rows={6}
+            className="flex w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder="Optional: paste the reference solution here"
+          />
+        </div>
+
         <div className="flex items-center gap-3 pt-2">
           <Button type="submit" disabled={saving}>
             {saving ? "Saving..." : "Save Changes"}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => router.back()}
-          >
+          <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
           </Button>
         </div>

@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
         difficulty: body.difficulty || "medium",
         category: body.category || "",
         language: body.language || "python",
+        type: body.type || "python_script",
         files: body.files?.length
           ? {
               createMany: {

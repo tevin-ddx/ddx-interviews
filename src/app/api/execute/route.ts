@@ -76,6 +76,20 @@ async function executeSandbox(
     }
 
     try {
+      if (language === "shell") {
+        const result = await sandbox.runCommand("bash", ["-c", code]);
+        const stdout = (await result.stdout()) || "";
+        const stderr = (await result.stderr()) || "";
+        return {
+          stdout,
+          stderr,
+          code: result.exitCode ?? 1,
+          signal: null,
+          output: stdout + stderr,
+          engine: "sandbox",
+        };
+      }
+
       if (language === "python") {
         const result = await sandbox.runCommand("python3", ["-c", code]);
         const stdout = (await result.stdout()) || "";

@@ -38,6 +38,8 @@ export async function PUT(
         solutionCode: body.solutionCode,
         difficulty: body.difficulty,
         category: body.category,
+        type: body.type,
+        language: body.language,
       },
     });
     return NextResponse.json(question);
